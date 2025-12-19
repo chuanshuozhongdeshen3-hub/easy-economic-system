@@ -1,0 +1,15 @@
+# ========================
+# backend (Spring Boot)
+# ========================
+/backend/target/
+*.log
+/backend/.idea/
+*.iml
+
+# ========================
+# frontend (Vue3 + Vite)
+# ========================
+/frontend/node_modules/
+/frontend/dist/
+/frontend/.env.local
+/frontend/.env.*
