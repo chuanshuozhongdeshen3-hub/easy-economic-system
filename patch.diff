@@ -1,0 +1,120 @@
+diff --git a/frontend/src/App.vue b/frontend/src/App.vue
+index 58b0f21b1647b34ed23f23fc6488eb4f811c405e..3dd031116c8bd6a70a33dbb661736af3e2449164 100644
+--- a/frontend/src/App.vue
++++ b/frontend/src/App.vue
+@@ -1,30 +1,90 @@
+ <script setup lang="ts">
+-import HelloWorld from './components/HelloWorld.vue'
+-</script>
++import { computed, ref } from 'vue'
+ 
+-<template>
+-  <div>
+-    <a href="https://vite.dev" target="_blank">
+-      <img src="/vite.svg" class="logo" alt="Vite logo" />
+-    </a>
+-    <a href="https://vuejs.org/" target="_blank">
+-      <img src="./assets/vue.svg" class="logo vue" alt="Vue logo" />
+-    </a>
+-  </div>
+-  <HelloWorld msg="Vite + Vue" />
+-</template>
++const mode = ref<'login' | 'register'>('login')
++const username = ref('')
++const password = ref('')
++const message = ref('')
++const loading = ref(false)
++const token = ref(localStorage.getItem('auth_token') ?? '')
++const bookGuid = ref(localStorage.getItem('book_guid') ?? '')
++const userId = ref(localStorage.getItem('user_id') ?? '')
+ 
+-<style scoped>
+-.logo {
+-  height: 6em;
+-  padding: 1.5em;
+-  will-change: filter;
+-  transition: filter 300ms;
+-}
+-.logo:hover {
+-  filter: drop-shadow(0 0 2em #646cffaa);
++const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
++
++const titleText = computed(() => (mode.value === 'login' ? '登录到账本' : '注册新账号'))
++const actionText = computed(() => (mode.value === 'login' ? '登录' : '注册并登录'))
++
++const switchMode = () => {
++  mode.value = mode.value === 'login' ? 'register' : 'login'
++  message.value = ''
+ }
+-.logo.vue:hover {
+-  filter: drop-shadow(0 0 2em #42b883aa);
++
++const handleSubmit = async () => {
++  message.value = ''
++  loading.value = true
++  try {
++    const response = await fetch(`${apiBase}/api/auth/${mode.value}`, {
++      method: 'POST',
++      headers: { 'Content-Type': 'application/json' },
++      body: JSON.stringify({ username: username.value, password: password.value })
++    })
++
++    const data = await response.json()
++    if (!response.ok) {
++      message.value = data.message || '请求失败'
++      return
++    }
++
++    token.value = data.token
++    bookGuid.value = data.bookGuid
++    userId.value = data.userId
++    localStorage.setItem('auth_token', token.value)
++    localStorage.setItem('book_guid', bookGuid.value ?? '')
++    localStorage.setItem('user_id', String(userId.value))
++    message.value = mode.value === 'login' ? '登录成功' : '注册成功，已为你准备新的账本'
++  } catch (error: unknown) {
++    message.value = error instanceof Error ? error.message : '网络错误'
++  } finally {
++    loading.value = false
++  }
+ }
+-</style>
++
++const hasSession = computed(() => !!token.value)
++</script>
++
++<template>
++  <main class="page">
++    <section class="card">
++      <h1>{{ titleText }}</h1>
++      <p class="subtitle">每个账号都有独立账本，便于隔离管理。</p>
++
++      <form class="form" @submit.prevent="handleSubmit">
++        <label class="field">
++          <span>用户名</span>
++          <input v-model="username" type="text" name="username" placeholder="请输入用户名" required />
++        </label>
++        <label class="field">
++          <span>密码</span>
++          <input v-model="password" type="password" name="password" placeholder="至少6位字符" minlength="6" required />
++        </label>
++
++        <button class="primary" type="submit" :disabled="loading">
++          {{ loading ? '请求中...' : actionText }}
++        </button>
++      </form>
++
++      <p class="message" :class="{ success: hasSession, error: !hasSession && message }" v-if="message">{{ message }}</p>
++
++      <div class="session" v-if="hasSession">
++        <p><strong>当前用户ID：</strong>{{ userId }}</p>
++        <p><strong>账本编号：</strong>{{ bookGuid }}</p>
++        <p><strong>令牌：</strong>{{ token }}</p>
++      </div>
++
++      <button class="link" type="button" @click="switchMode">
++        {{ mode === 'login' ? '还没有账号？点击注册' : '已有账号？去登录' }}
++      </button>
++    </section>
++  </main>
++</template>
