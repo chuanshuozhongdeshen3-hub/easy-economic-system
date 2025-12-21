@@ -1,15 +1,27 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 
 type Mode = 'login' | 'register'
 
 const mode = ref<Mode>('login')
 const loading = ref(false)
 const message = ref('')
+const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
 
 const form = reactive({
   username: '',
-  password: ''
+  password: '',
+  bookName: '',
+  bookSize: '',
+  registeredCapitalNum: null as number | null,
+  registeredCapitalDenom: 100 as number | null,
+  fiscalYearStartMonth: null as number | null,
+  fiscalYearStartDay: null as number | null
+})
+
+const storedSession = reactive({
+  userId: localStorage.getItem('user_id') ?? '',
+  bookGuid: localStorage.getItem('book_guid') ?? ''
 })
 
 const switchMode = (next: Mode) => {
@@ -17,16 +29,38 @@ const switchMode = (next: Mode) => {
   message.value = ''
 }
 
+const titleText = computed(() => (mode.value === 'login' ? '登录到账本' : '注册新账本'))
+const actionText = computed(() => (mode.value === 'login' ? '登录' : '注册并创建账本'))
+
+const buildPayload = () => {
+  if (mode.value === 'login') {
+    return {
+      username: form.username,
+      password: form.password
+    }
+  }
+  return {
+    username: form.username,
+    password: form.password,
+    bookName: form.bookName,
+    bookSize: form.bookSize || null,
+    registeredCapitalNum: form.registeredCapitalNum,
+    registeredCapitalDenom: form.registeredCapitalDenom,
+    fiscalYearStartMonth: form.fiscalYearStartMonth,
+    fiscalYearStartDay: form.fiscalYearStartDay
+  }
+}
+
 const submit = async () => {
   loading.value = true
   message.value = ''
   try {
-    const response = await fetch(`http://localhost:8080/api/auth/${mode.value}`, {
+    const response = await fetch(`${apiBase}/api/auth/${mode.value}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(form)
+      body: JSON.stringify(buildPayload())
     })
 
     const data = await response.json()
@@ -34,7 +68,12 @@ const submit = async () => {
       throw new Error(data.message || '请求失败')
     }
 
-    message.value = `${mode.value === 'login' ? '登录' : '注册'}成功，欢迎 ${data.data.username}`
+    const resp = data.data as { id: number; username: string; bookGuid: string }
+    storedSession.userId = String(resp.id ?? '')
+    storedSession.bookGuid = resp.bookGuid ?? ''
+    localStorage.setItem('user_id', storedSession.userId)
+    localStorage.setItem('book_guid', storedSession.bookGuid)
+    message.value = mode.value === 'login' ? '登录成功' : '注册成功，已为你创建默认账本'
   } catch (error) {
     message.value = error instanceof Error ? error.message : '请求失败'
   } finally {
@@ -45,36 +84,111 @@ const submit = async () => {
 
 <template>
   <div class="panel">
-    <h1>简单财务管理系统</h1>
-    <p class="subtitle">先完成登录和注册，确保每个账号拥有自己的账本空间。</p>
+    <h1>{{ titleText }}</h1>
+    <p class="subtitle">简易财务练手项目，注册时将自动初始化你的企业账本。</p>
 
     <div class="mode-toggle">
-      <button :class="{ active: mode === 'login' }" @click="switchMode('login')">登录</button>
-      <button :class="{ active: mode === 'register' }" @click="switchMode('register')">注册</button>
+      <button :class="{ active: mode === 'login' }" type="button" @click="switchMode('login')">登录</button>
+      <button :class="{ active: mode === 'register' }" type="button" @click="switchMode('register')">注册</button>
     </div>
 
     <form class="form" @submit.prevent="submit">
-      <label>
-        用户名
-        <input v-model.trim="form.username" type="text" name="username" required minlength="3" />
+      <label class="field">
+        <span>用户名</span>
+        <input v-model.trim="form.username" type="text" name="username" placeholder="请输入用户名" required minlength="3" />
       </label>
-      <label>
-        密码
-        <input v-model.trim="form.password" type="password" name="password" required minlength="6" />
+      <label class="field">
+        <span>密码</span>
+        <input
+          v-model.trim="form.password"
+          type="password"
+          name="password"
+          placeholder="至少 6 位密码"
+          minlength="6"
+          required
+        />
       </label>
+
+      <template v-if="mode === 'register'">
+        <label class="field">
+          <span>账本名称（企业名称）</span>
+          <input v-model.trim="form.bookName" type="text" name="bookName" placeholder="如：月光科技有限公司" required />
+        </label>
+
+        <label class="field">
+          <span>企业规模（可选）</span>
+          <input v-model.trim="form.bookSize" type="text" name="bookSize" placeholder="如：50人以下" />
+        </label>
+
+        <div class="inline">
+          <label class="field">
+            <span>注册资本（分子，可选）</span>
+            <input
+              v-model.number="form.registeredCapitalNum"
+              type="number"
+              min="0"
+              step="1"
+              name="registeredCapitalNum"
+              placeholder="单位：分子，示例 1000000"
+            />
+          </label>
+          <label class="field">
+            <span>注册资本（分母，可选）</span>
+            <input
+              v-model.number="form.registeredCapitalDenom"
+              type="number"
+              min="1"
+              step="1"
+              name="registeredCapitalDenom"
+              placeholder="默认 100"
+            />
+          </label>
+        </div>
+
+        <div class="inline">
+          <label class="field">
+            <span>会计年度起始月（1-12，可选）</span>
+            <input
+              v-model.number="form.fiscalYearStartMonth"
+              type="number"
+              min="1"
+              max="12"
+              step="1"
+              name="fiscalYearStartMonth"
+              placeholder="示例：1"
+            />
+          </label>
+          <label class="field">
+            <span>会计年度起始日（1-31，可选）</span>
+            <input
+              v-model.number="form.fiscalYearStartDay"
+              type="number"
+              min="1"
+              max="31"
+              step="1"
+              name="fiscalYearStartDay"
+              placeholder="示例：1"
+            />
+          </label>
+        </div>
+      </template>
+
       <button class="submit" type="submit" :disabled="loading">
-        {{ loading ? '处理中...' : mode === 'login' ? '登录' : '注册' }}
+        {{ loading ? '处理中...' : actionText }}
       </button>
     </form>
 
     <p v-if="message" class="message">{{ message }}</p>
-    <p class="tip">后台接口：<code>http://localhost:8080/api/auth</code></p>
+    <div v-if="storedSession.userId || storedSession.bookGuid" class="session">
+      <p><strong>当前用户 ID：</strong>{{ storedSession.userId }}</p>
+      <p><strong>账本 GUID：</strong>{{ storedSession.bookGuid }}</p>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .panel {
-  max-width: 480px;
+  max-width: 560px;
   margin: 0 auto;
   padding: 32px;
   background: #ffffff;
@@ -122,12 +236,18 @@ h1 {
   gap: 16px;
 }
 
-label {
+.field {
   display: flex;
   flex-direction: column;
   gap: 6px;
   color: #0f172a;
   font-weight: 600;
+}
+
+.inline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
 }
 
 input {
@@ -166,15 +286,13 @@ input:focus {
   font-weight: 600;
 }
 
-.tip {
-  margin-top: 6px;
-  color: #64748b;
-  font-size: 13px;
-}
-
-code {
-  background: #f1f5f9;
-  padding: 4px 6px;
-  border-radius: 6px;
+.session {
+  margin-top: 10px;
+  color: #334155;
+  font-size: 14px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 10px 12px;
 }
 </style>
