@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -112,6 +114,7 @@ public class AuthService {
                     now
             );
 
+            // 根账户
             jdbcTemplate.update(
                     "INSERT INTO accounts (guid, book_guid, name, code, description, account_type, parent_guid, hidden, placeholder, created_at, updated_at) " +
                             "VALUES (?, ?, ?, NULL, ?, ?, NULL, 0, 1, ?, ?)",
@@ -124,6 +127,9 @@ public class AuthService {
                     now
             );
 
+            // 默认总账科目及示例子科目
+            seedDefaultAccounts(bookGuid, rootAccountGuid, now);
+
             jdbcTemplate.update(
                     "INSERT INTO sys_user_books (user_id, book_guid, created_at) VALUES (?, ?, ?)",
                     userId,
@@ -135,5 +141,83 @@ public class AuthService {
         }
 
         return bookGuid;
+    }
+
+    private void seedDefaultAccounts(String bookGuid, String rootGuid, LocalDateTime now) {
+        // 总账科目
+        String assetGuid = UUID.randomUUID().toString();
+        String liabilityGuid = UUID.randomUUID().toString();
+        String equityGuid = UUID.randomUUID().toString();
+        String incomeGuid = UUID.randomUUID().toString();
+        String expenseGuid = UUID.randomUUID().toString();
+
+        insertAccount(assetGuid, bookGuid, "资产", "ASSET", rootGuid, true, "资产类科目", now);
+        insertAccount(liabilityGuid, bookGuid, "负债", "LIABILITY", rootGuid, true, "负债类科目", now);
+        insertAccount(equityGuid, bookGuid, "所有者权益", "EQUITY", rootGuid, true, "权益类科目", now);
+        insertAccount(incomeGuid, bookGuid, "收入", "INCOME", rootGuid, true, "收入类科目", now);
+        insertAccount(expenseGuid, bookGuid, "费用", "EXPENSE", rootGuid, true, "费用类科目", now);
+
+        // 示例子科目
+        List<AccountSeed> seeds = new ArrayList<>();
+        seeds.add(new AccountSeed("现金", "ASSET", assetGuid, false, "库存现金"));
+        seeds.add(new AccountSeed("银行存款", "ASSET", assetGuid, false, "银行账户余额"));
+        seeds.add(new AccountSeed("应收账款", "ASSET", assetGuid, false, "客户应收"));
+        seeds.add(new AccountSeed("预付账款", "ASSET", assetGuid, false, "供应商预付款"));
+        seeds.add(new AccountSeed("存货", "ASSET", assetGuid, false, "原材料/库存商品"));
+        seeds.add(new AccountSeed("固定资产", "ASSET", assetGuid, false, "固定资产原值"));
+        seeds.add(new AccountSeed("累计折旧", "ASSET", assetGuid, false, "固定资产累计折旧"));
+
+        seeds.add(new AccountSeed("应付账款", "LIABILITY", liabilityGuid, false, "供应商应付"));
+        seeds.add(new AccountSeed("预收账款", "LIABILITY", liabilityGuid, false, "客户预收"));
+        seeds.add(new AccountSeed("应付职工薪酬", "LIABILITY", liabilityGuid, false, "工资社保公积金"));
+        seeds.add(new AccountSeed("应交税费", "LIABILITY", liabilityGuid, false, "各类税费应交"));
+
+        seeds.add(new AccountSeed("实收资本", "EQUITY", equityGuid, false, "投资者投入资本"));
+        seeds.add(new AccountSeed("资本公积", "EQUITY", equityGuid, false, "资本溢价等"));
+        seeds.add(new AccountSeed("留存收益", "EQUITY", equityGuid, false, "未分配利润"));
+
+        seeds.add(new AccountSeed("主营业务收入", "INCOME", incomeGuid, false, "主营产品/服务收入"));
+        seeds.add(new AccountSeed("其他业务收入", "INCOME", incomeGuid, false, "非主营业务收入"));
+
+        seeds.add(new AccountSeed("主营业务成本", "EXPENSE", expenseGuid, false, "对应主营收入的成本"));
+        seeds.add(new AccountSeed("销售费用", "EXPENSE", expenseGuid, false, "销售相关费用"));
+        seeds.add(new AccountSeed("管理费用", "EXPENSE", expenseGuid, false, "管理相关费用"));
+        seeds.add(new AccountSeed("财务费用", "EXPENSE", expenseGuid, false, "利息等财务成本"));
+
+        for (AccountSeed seed : seeds) {
+            insertAccount(UUID.randomUUID().toString(), bookGuid, seed.name, seed.type, seed.parentGuid, seed.placeholder, seed.description, now);
+        }
+    }
+
+    private void insertAccount(String guid, String bookGuid, String name, String type, String parentGuid, boolean placeholder, String description, LocalDateTime now) {
+        jdbcTemplate.update(
+                "INSERT INTO accounts (guid, book_guid, name, code, description, account_type, parent_guid, hidden, placeholder, created_at, updated_at) " +
+                        "VALUES (?, ?, ?, NULL, ?, ?, ?, 0, ?, ?, ?)",
+                guid,
+                bookGuid,
+                name,
+                description,
+                type,
+                parentGuid,
+                placeholder ? 1 : 0,
+                now,
+                now
+        );
+    }
+
+    private static class AccountSeed {
+        final String name;
+        final String type;
+        final String parentGuid;
+        final boolean placeholder;
+        final String description;
+
+        AccountSeed(String name, String type, String parentGuid, boolean placeholder, String description) {
+            this.name = name;
+            this.type = type;
+            this.parentGuid = parentGuid;
+            this.placeholder = placeholder;
+            this.description = description;
+        }
     }
 }
