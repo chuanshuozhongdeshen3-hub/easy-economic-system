@@ -40,6 +40,7 @@ public class AccountService {
             accounts = accountRepository.findByBookGuid(bookGuid);
         }
         Map<String, BigDecimal> baseBalances = loadBaseBalances(bookGuid);
+        applyRegisteredCapital(bookGuid, baseBalances);
 
         Map<String, AccountNodeResponse> nodeMap = new HashMap<>();
         for (Account account : accounts) {
@@ -116,6 +117,27 @@ public class AccountService {
             }
         }, bookGuid);
         return map;
+    }
+
+    /**
+     * 如果账本配置了注册资本，则将金额挂到“实收资本”科目上（用于初始展示）。
+     */
+    private void applyRegisteredCapital(String bookGuid, Map<String, BigDecimal> baseBalances) {
+        bookRepository.findById(bookGuid).ifPresent(book -> {
+            Long num = book.getRegisteredCapitalNum();
+            Long denom = book.getRegisteredCapitalDenom();
+            if (num == null || num == 0) {
+                return;
+            }
+            if (denom == null || denom == 0) {
+                denom = 100L;
+            }
+            BigDecimal value = BigDecimal.valueOf(num)
+                    .divide(BigDecimal.valueOf(denom), 2, RoundingMode.HALF_UP);
+
+            accountRepository.findFirstByBookGuidAndName(bookGuid, "实收资本")
+                    .ifPresent(account -> baseBalances.merge(account.getGuid(), value, BigDecimal::add));
+        });
     }
 
     @Transactional
