@@ -1,0 +1,294 @@
+package com.moon.backend.service;
+
+import com.moon.backend.dto.AccountNodeResponse;
+import com.moon.backend.dto.CreateAccountRequest;
+import com.moon.backend.dto.UpdateAccountRequest;
+import com.moon.backend.entity.Account;
+import com.moon.backend.entity.Book;
+import com.moon.backend.repository.AccountRepository;
+import com.moon.backend.repository.BookRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+public class AccountService {
+
+    private final AccountRepository accountRepository;
+    private final BookRepository bookRepository;
+    private final JdbcTemplate jdbcTemplate;
+
+    public List<AccountNodeResponse> getAccountTree(String bookGuid) {
+        List<Account> accounts = accountRepository.findByBookGuid(bookGuid);
+        if (accounts.isEmpty()) {
+            // 兜底：账本存在但没有科目时，自动创建根账户和默认科目
+            createDefaultAccountsIfMissing(bookGuid);
+            accounts = accountRepository.findByBookGuid(bookGuid);
+        }
+        Map<String, BigDecimal> baseBalances = loadBaseBalances(bookGuid);
+
+        Map<String, AccountNodeResponse> nodeMap = new HashMap<>();
+        for (Account account : accounts) {
+            AccountNodeResponse node = new AccountNodeResponse();
+            node.setGuid(account.getGuid());
+            node.setName(account.getName());
+            node.setCode(account.getCode());
+            node.setAccountType(account.getAccountType());
+            node.setDescription(account.getDescription());
+            node.setBalance(baseBalances.getOrDefault(account.getGuid(), BigDecimal.ZERO));
+            nodeMap.put(account.getGuid(), node);
+        }
+
+        // 构建树
+        List<AccountNodeResponse> roots = new ArrayList<>();
+        for (Account account : accounts) {
+            AccountNodeResponse node = nodeMap.get(account.getGuid());
+            if (account.getParentGuid() == null) {
+                roots.add(node);
+            } else {
+                AccountNodeResponse parent = nodeMap.get(account.getParentGuid());
+                if (parent != null) {
+                    parent.getChildren().add(node);
+                } else {
+                    roots.add(node); // 兜底：如果缺失父节点，作为根节点
+                }
+            }
+        }
+
+        // 排序（按名称/编码），并向上汇总余额
+        for (AccountNodeResponse root : roots) {
+            sortChildren(root);
+            aggregateBalance(root);
+        }
+
+        // 不暴露根占位科目，返回其子科目列表
+        List<AccountNodeResponse> visibleRoots = roots.stream()
+                .flatMap(r -> r.getChildren().isEmpty() ? List.of(r).stream() : r.getChildren().stream())
+                .collect(Collectors.toList());
+        return visibleRoots;
+    }
+
+    private void sortChildren(AccountNodeResponse node) {
+        node.getChildren().sort(Comparator.comparing((AccountNodeResponse n) -> Objects.toString(n.getCode(), ""))
+                .thenComparing(AccountNodeResponse::getName));
+        for (AccountNodeResponse child : node.getChildren()) {
+            sortChildren(child);
+        }
+    }
+
+    private BigDecimal aggregateBalance(AccountNodeResponse node) {
+        BigDecimal sum = node.getBalance();
+        for (AccountNodeResponse child : node.getChildren()) {
+            sum = sum.add(aggregateBalance(child));
+        }
+        node.setBalance(sum);
+        return sum;
+    }
+
+    private Map<String, BigDecimal> loadBaseBalances(String bookGuid) {
+        String sql = """
+                SELECT s.account_guid AS guid,
+                       SUM(CAST(s.value_num AS DECIMAL(18,4)) / NULLIF(s.value_denom, 0)) AS balance
+                  FROM splits s
+                  JOIN transactions t ON s.tx_guid = t.guid
+                 WHERE t.book_guid = ?
+                 GROUP BY s.account_guid
+                """;
+        Map<String, BigDecimal> map = new HashMap<>();
+        jdbcTemplate.query(sql, rs -> {
+            BigDecimal balance = rs.getBigDecimal("balance");
+            if (balance != null) {
+                map.put(rs.getString("guid"), balance.setScale(2, RoundingMode.HALF_UP));
+            }
+        }, bookGuid);
+        return map;
+    }
+
+    @Transactional
+    public Account createAccount(CreateAccountRequest request) {
+        Account parent = accountRepository.findById(request.getParentGuid())
+                .orElseThrow(() -> new IllegalArgumentException("父级科目不存在"));
+        if (!Objects.equals(parent.getBookGuid(), request.getBookGuid())) {
+            throw new IllegalArgumentException("父级科目不属于当前账本");
+        }
+        if (!Objects.equals(parent.getAccountType(), request.getAccountType())) {
+            throw new IllegalArgumentException("子科目的会计科目类别必须与父级一致");
+        }
+
+        Account account = new Account();
+        account.setGuid(UUID.randomUUID().toString());
+        account.setBookGuid(request.getBookGuid());
+        account.setName(request.getName());
+        account.setCode(request.getCode());
+        account.setDescription(request.getDescription());
+        account.setAccountType(request.getAccountType());
+        account.setParentGuid(request.getParentGuid());
+        account.setHidden(false);
+        account.setPlaceholder(false);
+        account.setCreatedAt(LocalDateTime.now());
+        account.setUpdatedAt(LocalDateTime.now());
+        return accountRepository.save(account);
+    }
+
+    @Transactional
+    public Account updateAccount(UpdateAccountRequest request) {
+        Account account = accountRepository.findById(request.getGuid())
+                .orElseThrow(() -> new IllegalArgumentException("科目不存在"));
+        if (request.getName() != null && !request.getName().isBlank()) {
+            account.setName(request.getName());
+        }
+        if (request.getCode() != null) {
+            account.setCode(request.getCode());
+        }
+        if (request.getDescription() != null) {
+            account.setDescription(request.getDescription());
+        }
+        account.setUpdatedAt(LocalDateTime.now());
+        return accountRepository.save(account);
+    }
+
+    @Transactional
+    public void deleteAccount(String guid) {
+        Account account = accountRepository.findById(guid)
+                .orElseThrow(() -> new IllegalArgumentException("科目不存在"));
+
+        if (accountRepository.existsByParentGuid(guid)) {
+            throw new IllegalStateException("存在下级科目，无法删除");
+        }
+
+        // 检查凭证分录和业务行是否使用
+        Long splitCount = jdbcTemplate.queryForObject(
+                """
+                        SELECT COUNT(1)
+                          FROM splits s
+                          JOIN transactions t ON s.tx_guid = t.guid
+                         WHERE s.account_guid = ? AND t.book_guid = ?
+                        """,
+                Long.class,
+                guid,
+                account.getBookGuid()
+        );
+        if (splitCount != null && splitCount > 0) {
+            throw new IllegalStateException("科目已在凭证分录中使用，无法删除");
+        }
+
+        Long entryCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(1) FROM entries WHERE account_guid = ?",
+                Long.class,
+                guid
+        );
+        if (entryCount != null && entryCount > 0) {
+            throw new IllegalStateException("科目已在业务分录中使用，无法删除");
+        }
+
+        accountRepository.delete(account);
+    }
+
+    @Transactional
+    protected void createDefaultAccountsIfMissing(String bookGuid) {
+        Book book = bookRepository.findById(bookGuid)
+                .orElseThrow(() -> new IllegalArgumentException("账本不存在"));
+
+        String rootGuid = book.getRootAccountGuid();
+        if (rootGuid == null || !accountRepository.existsById(rootGuid)) {
+            rootGuid = UUID.randomUUID().toString();
+            jdbcTemplate.update("UPDATE books SET root_account_guid = ? WHERE guid = ?", rootGuid, bookGuid);
+            insertAccount(rootGuid, bookGuid, "根账户", "ASSET", null, true, "系统自动创建的根账户", LocalDateTime.now());
+        }
+
+        boolean hasChildren = accountRepository.existsByParentGuid(rootGuid);
+        if (!hasChildren) {
+            seedDefaultAccounts(bookGuid, rootGuid, LocalDateTime.now());
+        }
+    }
+
+    private void seedDefaultAccounts(String bookGuid, String rootGuid, LocalDateTime now) {
+        String assetGuid = UUID.randomUUID().toString();
+        String liabilityGuid = UUID.randomUUID().toString();
+        String equityGuid = UUID.randomUUID().toString();
+        String incomeGuid = UUID.randomUUID().toString();
+        String expenseGuid = UUID.randomUUID().toString();
+
+        insertAccount(assetGuid, bookGuid, "资产", "ASSET", rootGuid, true, "资产类科目", now);
+        insertAccount(liabilityGuid, bookGuid, "负债", "LIABILITY", rootGuid, true, "负债类科目", now);
+        insertAccount(equityGuid, bookGuid, "所有者权益", "EQUITY", rootGuid, true, "权益类科目", now);
+        insertAccount(incomeGuid, bookGuid, "收入", "INCOME", rootGuid, true, "收入类科目", now);
+        insertAccount(expenseGuid, bookGuid, "费用", "EXPENSE", rootGuid, true, "费用类科目", now);
+
+        List<AccountSeed> seeds = new ArrayList<>();
+        seeds.add(new AccountSeed("现金", "ASSET", assetGuid, false, "库存现金"));
+        seeds.add(new AccountSeed("银行存款", "ASSET", assetGuid, false, "银行账户余额"));
+        seeds.add(new AccountSeed("应收账款", "ASSET", assetGuid, false, "客户应收"));
+        seeds.add(new AccountSeed("预付账款", "ASSET", assetGuid, false, "供应商预付款"));
+        seeds.add(new AccountSeed("存货", "ASSET", assetGuid, false, "原材料/库存商品"));
+        seeds.add(new AccountSeed("固定资产", "ASSET", assetGuid, false, "固定资产原值"));
+        seeds.add(new AccountSeed("累计折旧", "ASSET", assetGuid, false, "固定资产累计折旧"));
+
+        seeds.add(new AccountSeed("应付账款", "LIABILITY", liabilityGuid, false, "供应商应付"));
+        seeds.add(new AccountSeed("预收账款", "LIABILITY", liabilityGuid, false, "客户预收"));
+        seeds.add(new AccountSeed("应付职工薪酬", "LIABILITY", liabilityGuid, false, "工资社保公积金"));
+        seeds.add(new AccountSeed("应交税费", "LIABILITY", liabilityGuid, false, "各类税费应交"));
+
+        seeds.add(new AccountSeed("实收资本", "EQUITY", equityGuid, false, "投资者投入资本"));
+        seeds.add(new AccountSeed("资本公积", "EQUITY", equityGuid, false, "资本溢价等"));
+        seeds.add(new AccountSeed("留存收益", "EQUITY", equityGuid, false, "未分配利润"));
+
+        seeds.add(new AccountSeed("主营业务收入", "INCOME", incomeGuid, false, "主营产品/服务收入"));
+        seeds.add(new AccountSeed("其他业务收入", "INCOME", incomeGuid, false, "非主营业务收入"));
+
+        seeds.add(new AccountSeed("主营业务成本", "EXPENSE", expenseGuid, false, "对应主营收入的成本"));
+        seeds.add(new AccountSeed("销售费用", "EXPENSE", expenseGuid, false, "销售相关费用"));
+        seeds.add(new AccountSeed("管理费用", "EXPENSE", expenseGuid, false, "管理相关费用"));
+        seeds.add(new AccountSeed("财务费用", "EXPENSE", expenseGuid, false, "利息等财务成本"));
+
+        for (AccountSeed seed : seeds) {
+            insertAccount(UUID.randomUUID().toString(), bookGuid, seed.name, seed.type, seed.parentGuid, seed.placeholder, seed.description, now);
+        }
+    }
+
+    private void insertAccount(String guid, String bookGuid, String name, String type, String parentGuid, boolean placeholder, String description, LocalDateTime now) {
+        jdbcTemplate.update(
+                "INSERT INTO accounts (guid, book_guid, name, code, description, account_type, parent_guid, hidden, placeholder, created_at, updated_at) " +
+                        "VALUES (?, ?, ?, NULL, ?, ?, ?, 0, ?, ?, ?)",
+                guid,
+                bookGuid,
+                name,
+                description,
+                type,
+                parentGuid,
+                placeholder ? 1 : 0,
+                now,
+                now
+        );
+    }
+
+    private static class AccountSeed {
+        final String name;
+        final String type;
+        final String parentGuid;
+        final boolean placeholder;
+        final String description;
+
+        AccountSeed(String name, String type, String parentGuid, boolean placeholder, String description) {
+            this.name = name;
+            this.type = type;
+            this.parentGuid = parentGuid;
+            this.placeholder = placeholder;
+            this.description = description;
+        }
+    }
+}

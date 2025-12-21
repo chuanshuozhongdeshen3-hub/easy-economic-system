@@ -8,6 +8,7 @@ import com.moon.backend.entity.SysUserBook;
 import com.moon.backend.repository.SysUserBookRepository;
 import com.moon.backend.repository.SysUserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -44,7 +45,8 @@ public class AuthService {
         sysUser.setUpdatedAt(LocalDateTime.now());
         SysUser savedUser = userRepository.save(sysUser);
 
-        String bookGuid = createDefaultBookForUser(savedUser.getId(), request);
+        // 如果已有账本（可能包含科目数据），优先绑定；否则创建新账本
+        String bookGuid = ensureBookBinding(savedUser.getId(), request, true);
         return new AuthResponse(savedUser.getId(), savedUser.getUsername(), bookGuid);
     }
 
@@ -63,10 +65,91 @@ public class AuthService {
             throw new IllegalArgumentException("用户名或密码错误");
         }
 
-        String bookGuid = userBookRepository.findByUserId(user.getId())
-                .map(SysUserBook::getBookGuid)
-                .orElse(null);
+        String bookGuid = ensureBookBinding(user.getId(), null, false);
         return new AuthResponse(user.getId(), user.getUsername(), bookGuid);
+    }
+
+    /**
+     * 确保用户绑定到账本：
+     * 1) 若已有绑定且该账本有科目，则直接返回；
+     * 2) 若无绑定或绑定的账本没有科目，则尝试绑定第一本已有科目的账本；
+     * 3) 若不存在任何账本或账本无科目，按需要创建默认账本。
+     */
+    private String ensureBookBinding(Long userId, RegisterRequest registerRequest, boolean allowCreate) {
+        // 已有绑定且有科目
+        Optional<SysUserBook> bound = userBookRepository.findByUserId(userId);
+        if (bound.isPresent()) {
+            String guid = bound.get().getBookGuid();
+            if (bookHasAccounts(guid)) {
+                return guid;
+            }
+        }
+
+        // 尝试绑定第一本有科目的账本
+        String existingBookWithAccounts = jdbcTemplate.query(
+                "SELECT b.guid FROM books b WHERE EXISTS (SELECT 1 FROM accounts a WHERE a.book_guid = b.guid) LIMIT 1",
+                rs -> rs.next() ? rs.getString("guid") : null
+        );
+        if (existingBookWithAccounts != null) {
+            bindUserToBook(userId, existingBookWithAccounts);
+            return existingBookWithAccounts;
+        }
+
+        // 尝试绑定第一本账本（即使没有科目）
+        String anyBookGuid = jdbcTemplate.query(
+                "SELECT guid FROM books LIMIT 1",
+                rs -> rs.next() ? rs.getString("guid") : null
+        );
+        if (anyBookGuid != null) {
+            bindUserToBook(userId, anyBookGuid);
+            return anyBookGuid;
+        }
+
+        // 没有账本且允许创建，则创建默认账本
+        if (allowCreate) {
+            RegisterRequest req = registerRequest != null ? registerRequest : buildDefaultRegisterRequest();
+            return createDefaultBookForUser(userId, req);
+        }
+
+        throw new IllegalStateException("未找到可用账本，且未启用自动创建");
+    }
+
+    private RegisterRequest buildDefaultRegisterRequest() {
+        RegisterRequest req = new RegisterRequest();
+        req.setBookName("默认账本");
+        req.setBookSize(null);
+        req.setRegisteredCapitalNum(null);
+        req.setRegisteredCapitalDenom(null);
+        req.setFiscalYearStartMonth(null);
+        req.setFiscalYearStartDay(null);
+        // 用户名/密码字段在此流程不会使用
+        req.setUsername("system");
+        req.setPassword("system");
+        return req;
+    }
+
+    private void bindUserToBook(Long userId, String bookGuid) {
+        try {
+            jdbcTemplate.update(
+                    "INSERT INTO sys_user_books (user_id, book_guid, created_at) VALUES (?, ?, ?) " +
+                            "ON DUPLICATE KEY UPDATE book_guid = VALUES(book_guid)",
+                    userId,
+                    bookGuid,
+                    LocalDateTime.now()
+            );
+        } catch (DataIntegrityViolationException ex) {
+            // 如果 book_guid 已被其他用户占用则报错
+            throw new IllegalStateException("账本已被其他用户占用，无法绑定", ex);
+        }
+    }
+
+    private boolean bookHasAccounts(String bookGuid) {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(1) FROM accounts WHERE book_guid = ?",
+                Integer.class,
+                bookGuid
+        );
+        return count != null && count > 0;
     }
 
     private void validateRegisterRequest(RegisterRequest request) {

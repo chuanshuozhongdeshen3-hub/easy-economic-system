@@ -3,6 +3,10 @@ import { computed, reactive, ref } from 'vue'
 
 type Mode = 'login' | 'register'
 
+const emit = defineEmits<{
+  (e: 'success', payload: { id: number; username: string; bookGuid: string }): void
+}>()
+
 const mode = ref<Mode>('login')
 const loading = ref(false)
 const message = ref('')
@@ -74,6 +78,7 @@ const submit = async () => {
     localStorage.setItem('user_id', storedSession.userId)
     localStorage.setItem('book_guid', storedSession.bookGuid)
     message.value = mode.value === 'login' ? '登录成功' : '注册成功，已为你创建默认账本'
+    emit('success', resp)
   } catch (error) {
     message.value = error instanceof Error ? error.message : '请求失败'
   } finally {
