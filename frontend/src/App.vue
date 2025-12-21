@@ -2,11 +2,21 @@
 import { reactive } from 'vue'
 import AuthPanel from './components/AuthPanel.vue'
 import AccountTree from './components/AccountTree.vue'
+import PurchasePanel from './components/PurchasePanel.vue'
+import SupplierPanel from './components/SupplierPanel.vue'
+import CustomerPanel from './components/CustomerPanel.vue'
+import PurchaseOrderPanel from './components/PurchaseOrderPanel.vue'
+import SalesInvoicePanel from './components/SalesInvoicePanel.vue'
+import ReconcilePanel from './components/ReconcilePanel.vue'
 
 const session = reactive({
   userId: localStorage.getItem('user_id') ?? '',
   bookGuid: localStorage.getItem('book_guid') ?? '',
   username: ''
+})
+const selection = reactive({
+  module: '',
+  action: ''
 })
 
 const handleAuthSuccess = (payload: { id: number; username: string; bookGuid: string }) => {
@@ -21,6 +31,11 @@ const handleLogout = () => {
   session.username = ''
   localStorage.removeItem('user_id')
   localStorage.removeItem('book_guid')
+}
+
+const selectAction = (module: string, action: string) => {
+  selection.module = module
+  selection.action = action
 }
 </script>
 
@@ -41,6 +56,55 @@ const handleLogout = () => {
           <button class="link" type="button" @click="handleLogout">退出</button>
         </div>
       </header>
+
+      <section class="actions">
+        <div class="action-card">
+          <div class="action-header">
+            <h3>采购</h3>
+            <p>供应商、订单、发票、对账、过账</p>
+          </div>
+          <div class="action-buttons">
+            <button type="button" @click="selectAction('采购', '新增供应商')">新增供应商</button>
+            <button type="button" @click="selectAction('采购', '新增订单')">新增订单</button>
+            <button type="button" @click="selectAction('采购', '新增供应商')">新增供应商</button>
+            <button type="button" @click="selectAction('采购', '对账')">对账</button>
+            <button type="button" @click="selectAction('采购', '过账')">过账</button>
+          </div>
+        </div>
+        <div class="action-card">
+          <div class="action-header">
+            <h3>销售</h3>
+            <p>客户、销售单/发票、对账、过账</p>
+          </div>
+          <div class="action-buttons">
+            <button type="button" @click="selectAction('销售', '新增发票')">新增发票</button>
+            <button type="button" @click="selectAction('销售', '新增客户')">新增客户</button>
+            <button type="button" @click="selectAction('销售', '对账')">对账</button>
+            <button type="button" @click="selectAction('销售', '过账')">过账</button>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="selection.module" class="workbench">
+        <div class="workbench-header">
+          <div>
+            <h3>{{ selection.module }} - {{ selection.action }}</h3>
+            <p class="subtitle">当前账本：{{ session.bookGuid }}</p>
+          </div>
+          <button class="link" type="button" @click="selection.module = selection.action = ''">关闭</button>
+        </div>
+        <PurchasePanel v-if="selection.module === '采购' && selection.action === '过账'" :book-guid="session.bookGuid" />
+        <SupplierPanel v-else-if="selection.module === '采购' && selection.action === '新增供应商'" />
+        <PurchaseOrderPanel v-else-if="selection.module === '采购' && selection.action === '新增订单'" />
+        <ReconcilePanel v-else-if="selection.module === '采购' && selection.action === '对账'" />
+
+        <SalesInvoicePanel v-else-if="selection.module === '销售' && selection.action === '新增发票'" />
+        <CustomerPanel v-else-if="selection.module === '销售' && selection.action === '新增客户'" />
+        <ReconcilePanel v-else-if="selection.module === '销售' && selection.action === '对账'" />
+        <div v-else class="placeholder">
+          <p>功能即将接入：{{ selection.module }} - {{ selection.action }}</p>
+        </div>
+      </section>
 
       <AccountTree :book-guid="session.bookGuid" />
     </section>
@@ -109,5 +173,72 @@ const handleLogout = () => {
 
 .link:hover {
   background: #e2e8f0;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.action-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.action-header h3 {
+  margin: 0;
+  color: #0f172a;
+}
+
+.action-header p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.action-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.action-buttons button {
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-buttons button:hover {
+  background: #e2e8f0;
+}
+
+.workbench {
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.workbench-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+
+.placeholder {
+  color: #64748b;
+  font-size: 14px;
 }
 </style>
