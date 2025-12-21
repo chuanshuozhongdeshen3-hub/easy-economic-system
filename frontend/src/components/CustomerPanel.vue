@@ -75,7 +75,7 @@ const submit = async () => {
     <span>备注</span>
     <input v-model.trim="form.notes" type="text" placeholder="备注" />
   </label>
-  <button type="button" @click="submit">保存（占位）</button>
+      <button type="button" @click="submit" :disabled="loading">保存</button>
 </div>
 <p v-if="message" class="message">{{ message }}</p>
   </div>

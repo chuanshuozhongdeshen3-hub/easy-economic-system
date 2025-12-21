@@ -98,7 +98,7 @@ const submitEntries = async (orderGuid: string) => {
         <span>备注</span>
         <input v-model.trim="form.description" type="text" placeholder="说明" />
       </label>
-      <button type="button" @click="submit">保存（占位）</button>
+      <button type="button" @click="submit" :disabled="loading">保存</button>
     </div>
     <div class="entry">
       <h4>行项</h4>

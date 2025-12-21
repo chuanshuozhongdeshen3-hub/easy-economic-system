@@ -7,6 +7,7 @@ import SupplierPanel from './components/SupplierPanel.vue'
 import CustomerPanel from './components/CustomerPanel.vue'
 import PurchaseOrderPanel from './components/PurchaseOrderPanel.vue'
 import SalesInvoicePanel from './components/SalesInvoicePanel.vue'
+import SalesPanel from './components/SalesPanel.vue'
 import ReconcilePanel from './components/ReconcilePanel.vue'
 
 const session = reactive({
@@ -61,12 +62,11 @@ const selectAction = (module: string, action: string) => {
         <div class="action-card">
           <div class="action-header">
             <h3>采购</h3>
-            <p>供应商、订单、发票、对账、过账</p>
+            <p>供应商、订单、对账、过账</p>
           </div>
           <div class="action-buttons">
             <button type="button" @click="selectAction('采购', '新增供应商')">新增供应商</button>
             <button type="button" @click="selectAction('采购', '新增订单')">新增订单</button>
-            <button type="button" @click="selectAction('采购', '新增供应商')">新增供应商</button>
             <button type="button" @click="selectAction('采购', '对账')">对账</button>
             <button type="button" @click="selectAction('采购', '过账')">过账</button>
           </div>
@@ -94,13 +94,14 @@ const selectAction = (module: string, action: string) => {
           <button class="link" type="button" @click="selection.module = selection.action = ''">关闭</button>
         </div>
         <PurchasePanel v-if="selection.module === '采购' && selection.action === '过账'" :book-guid="session.bookGuid" />
-        <SupplierPanel v-else-if="selection.module === '采购' && selection.action === '新增供应商'" />
-        <PurchaseOrderPanel v-else-if="selection.module === '采购' && selection.action === '新增订单'" />
-        <ReconcilePanel v-else-if="selection.module === '采购' && selection.action === '对账'" />
+        <SupplierPanel v-else-if="selection.module === '采购' && selection.action === '新增供应商'" :book-guid="session.bookGuid" />
+        <PurchaseOrderPanel v-else-if="selection.module === '采购' && selection.action === '新增订单'" :book-guid="session.bookGuid" />
+        <ReconcilePanel v-else-if="selection.module === '采购' && selection.action === '对账'" :module="selection.module" :action="selection.action" />
 
-        <SalesInvoicePanel v-else-if="selection.module === '销售' && selection.action === '新增发票'" />
-        <CustomerPanel v-else-if="selection.module === '销售' && selection.action === '新增客户'" />
-        <ReconcilePanel v-else-if="selection.module === '销售' && selection.action === '对账'" />
+        <SalesInvoicePanel v-else-if="selection.module === '销售' && selection.action === '新增发票'" :book-guid="session.bookGuid" />
+        <CustomerPanel v-else-if="selection.module === '销售' && selection.action === '新增客户'" :book-guid="session.bookGuid" />
+        <ReconcilePanel v-else-if="selection.module === '销售' && selection.action === '对账'" :module="selection.module" :action="selection.action" />
+        <SalesPanel v-else-if="selection.module === '销售' && selection.action === '过账'" :book-guid="session.bookGuid" />
         <div v-else class="placeholder">
           <p>功能即将接入：{{ selection.module }} - {{ selection.action }}</p>
         </div>
