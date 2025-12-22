@@ -12,6 +12,16 @@ public class SalesReceiptRequest {
 
     private String receiptNo;
 
+    /**
+     * 关联销售发票 GUID，用于回写结算状态
+     */
+    private String invoiceGuid;
+
+    /**
+     * 发票号（可选，结算描述用）
+     */
+    private String invoiceNo;
+
     @NotNull
     @Min(1)
     private Long amountCent;

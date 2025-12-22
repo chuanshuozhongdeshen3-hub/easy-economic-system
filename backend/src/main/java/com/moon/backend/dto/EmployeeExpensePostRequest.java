@@ -6,23 +6,21 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 @Data
-public class SalesInvoicePostRequest {
+public class EmployeeExpensePostRequest {
     @NotBlank
     private String bookGuid;
 
-    private String invoiceNo;
+    @NotBlank
+    private String employeeGuid;
 
-    /**
-     * 关联销售发票 GUID，用于回写状态
-     */
-    private String invoiceGuid;
-
-    /**
-     * 金额（分，含税）
-     */
     @NotNull
     @Min(1)
     private Long amountCent;
 
     private String description;
+
+    /**
+     * 借方费用科目名称，默认管理费用
+     */
+    private String debitAccountName;
 }

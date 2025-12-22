@@ -15,6 +15,7 @@ const invoiceForm = reactive({
 
 const receiptForm = reactive({
   receiptNo: '',
+  invoiceGuid: '',
   amount: 0,
   description: '',
   cashAccountName: ''
@@ -58,6 +59,7 @@ const postReceipt = async () => {
         receiptNo: receiptForm.receiptNo || null,
         amountCent: Math.round(Number(receiptForm.amount) * 100),
         description: receiptForm.description || null,
+        invoiceGuid: receiptForm.invoiceGuid || null,
         cashAccountName: receiptForm.cashAccountName || null
       })
     })
@@ -96,6 +98,10 @@ const postReceipt = async () => {
       <label class="field">
         <span>收款单号（可选）</span>
         <input v-model.trim="receiptForm.receiptNo" type="text" placeholder="RCV-001" />
+      </label>
+      <label class="field">
+        <span>发票 GUID（可选，用于结算）</span>
+        <input v-model.trim="receiptForm.invoiceGuid" type="text" placeholder="发票 GUID" />
       </label>
       <label class="field">
         <span>金额（元）</span>

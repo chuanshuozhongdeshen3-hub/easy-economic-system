@@ -110,7 +110,7 @@ public class BusinessService {
         for (EntryItemRequest item : request.getItems()) {
             jdbcTemplate.update(
                     "INSERT INTO entries (guid, book_guid, invoice_guid, order_guid, job_guid, description, date, quantity_num, quantity_denom, price_num, price_denom, discount_num, discount_denom, account_guid, tax_table_guid, taxable, tax_included, tax_amount_num, tax_amount_denom, created_at, updated_at) " +
-                            "VALUES (?, ?, NULL, ?, NULL, ?, ?, 1, 1, ?, 100, NULL, NULL, ?, NULL, 0, 0, NULL, NULL, ?, ?)",
+                            "VALUES (?, ?, NULL, ?, NULL, ?, ?, 1, 1, ?, 100, NULL, NULL, ?, NULL, ?, ?, NULL, NULL, ?, ?)",
                     UUID.randomUUID().toString(),
                     request.getBookGuid(),
                     orderGuid,
@@ -118,6 +118,8 @@ public class BusinessService {
                     now,
                     item.getAmountCent(),
                     item.getAccountGuid(),
+                    taxableFlag(item),
+                    taxIncludedFlag(item),
                     now,
                     now
             );
@@ -130,7 +132,7 @@ public class BusinessService {
         for (EntryItemRequest item : request.getItems()) {
             jdbcTemplate.update(
                     "INSERT INTO entries (guid, book_guid, invoice_guid, order_guid, job_guid, description, date, quantity_num, quantity_denom, price_num, price_denom, discount_num, discount_denom, account_guid, tax_table_guid, taxable, tax_included, tax_amount_num, tax_amount_denom, created_at, updated_at) " +
-                            "VALUES (?, ?, ?, NULL, NULL, ?, ?, 1, 1, ?, 100, NULL, NULL, ?, NULL, 0, 0, NULL, NULL, ?, ?)",
+                            "VALUES (?, ?, ?, NULL, NULL, ?, ?, 1, 1, ?, 100, NULL, NULL, ?, NULL, ?, ?, NULL, NULL, ?, ?)",
                     UUID.randomUUID().toString(),
                     request.getBookGuid(),
                     invoiceGuid,
@@ -138,10 +140,22 @@ public class BusinessService {
                     now,
                     item.getAmountCent(),
                     item.getAccountGuid(),
+                    taxableFlag(item),
+                    taxIncludedFlag(item),
                     now,
                     now
             );
         }
+    }
+
+    private int taxableFlag(EntryItemRequest item) {
+        Double rate = item.getTaxRatePercent();
+        return (rate != null && rate > 0) ? 1 : 0;
+    }
+
+    private int taxIncludedFlag(EntryItemRequest item) {
+        Boolean incl = item.getTaxIncluded();
+        return Boolean.TRUE.equals(incl) ? 1 : 0;
     }
 
     private void ensureOwner(String bookGuid, String ownerType, String vendorGuid, String customerGuid, String employeeGuid, String name) {

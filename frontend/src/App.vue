@@ -9,6 +9,7 @@ import PurchaseOrderPanel from './components/PurchaseOrderPanel.vue'
 import SalesInvoicePanel from './components/SalesInvoicePanel.vue'
 import SalesPanel from './components/SalesPanel.vue'
 import ReconcilePanel from './components/ReconcilePanel.vue'
+import EmployeeExpensePanel from './components/EmployeeExpensePanel.vue'
 
 const session = reactive({
   userId: localStorage.getItem('user_id') ?? '',
@@ -83,6 +84,17 @@ const selectAction = (module: string, action: string) => {
             <button type="button" @click="selectAction('销售', '过账')">过账</button>
           </div>
         </div>
+        <div class="action-card">
+          <div class="action-header">
+            <h3>员工费用</h3>
+            <p>档案/项目、报销审批、应付/支付</p>
+          </div>
+          <div class="action-buttons">
+            <button type="button" @click="selectAction('员工费用', '员工档案')">员工档案</button>
+            <button type="button" @click="selectAction('员工费用', '报销/差旅')">报销/差旅</button>
+            <button type="button" @click="selectAction('员工费用', '过账')">过账</button>
+          </div>
+        </div>
       </section>
 
       <section v-if="selection.module" class="workbench">
@@ -102,6 +114,11 @@ const selectAction = (module: string, action: string) => {
         <CustomerPanel v-else-if="selection.module === '销售' && selection.action === '新增客户'" :book-guid="session.bookGuid" />
         <ReconcilePanel v-else-if="selection.module === '销售' && selection.action === '对账'" :module="selection.module" :action="selection.action" />
         <SalesPanel v-else-if="selection.module === '销售' && selection.action === '过账'" :book-guid="session.bookGuid" />
+        <EmployeeExpensePanel
+          v-else-if="selection.module === '员工费用'"
+          :book-guid="session.bookGuid"
+          :action="selection.action"
+        />
         <div v-else class="placeholder">
           <p>功能即将接入：{{ selection.module }} - {{ selection.action }}</p>
         </div>

@@ -49,13 +49,27 @@ public class PurchaseService {
                 now,
                 coalesce(request.getDescription(), "采购发票过账"),
                 "PURCHASE_INVOICE",
-                request.getInvoiceNo()
+                coalesce(request.getInvoiceGuid(), request.getOrderGuid())
         );
 
         // 借：费用/存货
         insertSplit(txGuid, debit.getGuid(), cents, request.getDescription());
         // 贷：应付账款
         insertSplit(txGuid, ap.getGuid(), -cents, request.getDescription());
+
+        // 回写发票状态
+        if (hasText(request.getInvoiceGuid())) {
+            jdbcTemplate.update(
+                    "UPDATE invoices SET status = 'POSTED', post_txn_guid = ? WHERE guid = ?",
+                    txGuid,
+                    request.getInvoiceGuid()
+            );
+            jdbcTemplate.update(
+                    "UPDATE invoices SET notes = CONCAT(COALESCE(notes,''), ?) WHERE guid = ?",
+                    " | 已过账金额(分):" + cents,
+                    request.getInvoiceGuid()
+            );
+        }
     }
 
     /**
@@ -86,13 +100,26 @@ public class PurchaseService {
                 now,
                 coalesce(request.getDescription(), "采购付款过账"),
                 "PURCHASE_PAYMENT",
-                request.getPayNo()
+                coalesce(request.getInvoiceGuid(), request.getPayNo())
         );
 
         // 借：应付账款
         insertSplit(txGuid, ap.getGuid(), cents, request.getDescription());
         // 贷：银行存款
         insertSplit(txGuid, cash.getGuid(), -cents, request.getDescription());
+
+        // 可选回写发票状态为已收款（简化：直接改为 APPROVED）
+        if (hasText(request.getInvoiceGuid())) {
+            jdbcTemplate.update(
+                    "UPDATE invoices SET status = 'APPROVED' WHERE guid = ?",
+                    request.getInvoiceGuid()
+            );
+            jdbcTemplate.update(
+                    "UPDATE invoices SET notes = CONCAT(COALESCE(notes,''), ?) WHERE guid = ?",
+                    " | 已支付金额(分):" + cents,
+                    request.getInvoiceGuid()
+            );
+        }
     }
 
     private void insertSplit(String txGuid, String accountGuid, long cents, String memo) {
@@ -136,5 +163,9 @@ public class PurchaseService {
 
     private String coalesce(String v, String def) {
         return (v == null || v.isBlank()) ? def : v;
+    }
+
+    private boolean hasText(String v) {
+        return v != null && !v.isBlank();
     }
 }

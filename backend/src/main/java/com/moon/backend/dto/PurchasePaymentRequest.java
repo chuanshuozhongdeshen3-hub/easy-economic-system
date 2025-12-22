@@ -19,6 +19,16 @@ public class PurchasePaymentRequest {
     private String payNo;
 
     /**
+     * 关联的采购发票 GUID，可选，用于回写状态/结算
+     */
+    private String invoiceGuid;
+
+    /**
+     * 本次支付关联的发票号（用于结算展示，可选）
+     */
+    private String invoiceNo;
+
+    /**
      * 付款金额，人民币元（含税）
      */
     @NotNull

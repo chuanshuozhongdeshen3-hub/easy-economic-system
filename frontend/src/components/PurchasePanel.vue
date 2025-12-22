@@ -11,6 +11,8 @@ const loading = ref(false)
 
 const invoiceForm = reactive({
   invoiceNo: '',
+  invoiceGuid: '',
+  orderGuid: '',
   amount: 0,
   description: '',
   debitAccountName: ''
@@ -18,6 +20,7 @@ const invoiceForm = reactive({
 
 const paymentForm = reactive({
   payNo: '',
+  invoiceGuid: '',
   amount: 0,
   description: '',
   cashAccountName: ''
@@ -36,7 +39,9 @@ const postInvoice = async () => {
         invoiceNo: invoiceForm.invoiceNo || null,
         amountCent: Math.round(Number(invoiceForm.amount) * 100),
         description: invoiceForm.description || null,
-        debitAccountName: invoiceForm.debitAccountName || null
+        debitAccountName: invoiceForm.debitAccountName || null,
+        invoiceGuid: invoiceForm.invoiceGuid || null,
+        orderGuid: invoiceForm.orderGuid || null
       })
     })
     const data = await res.json()
@@ -62,7 +67,8 @@ const postPayment = async () => {
         payNo: paymentForm.payNo || null,
         amountCent: Math.round(Number(paymentForm.amount) * 100),
         description: paymentForm.description || null,
-        cashAccountName: paymentForm.cashAccountName || null
+        cashAccountName: paymentForm.cashAccountName || null,
+        invoiceGuid: paymentForm.invoiceGuid || null
       })
     })
     const data = await res.json()
@@ -85,6 +91,14 @@ const postPayment = async () => {
         <input v-model.trim="invoiceForm.invoiceNo" type="text" placeholder="PI-001" />
       </label>
       <label class="field">
+        <span>发票 GUID（可选，用于回写状态）</span>
+        <input v-model.trim="invoiceForm.invoiceGuid" type="text" placeholder="发票 GUID" />
+      </label>
+      <label class="field">
+        <span>订单 GUID（可选）</span>
+        <input v-model.trim="invoiceForm.orderGuid" type="text" placeholder="订单 GUID" />
+      </label>
+      <label class="field">
         <span>金额（元，含税）</span>
         <input v-model.number="invoiceForm.amount" type="number" min="0" step="0.01" required />
       </label>
@@ -104,6 +118,10 @@ const postPayment = async () => {
       <label class="field">
         <span>付款单号（可选）</span>
         <input v-model.trim="paymentForm.payNo" type="text" placeholder="PAY-001" />
+      </label>
+      <label class="field">
+        <span>发票 GUID（可选，用于结算）</span>
+        <input v-model.trim="paymentForm.invoiceGuid" type="text" placeholder="发票 GUID" />
       </label>
       <label class="field">
         <span>金额（元）</span>

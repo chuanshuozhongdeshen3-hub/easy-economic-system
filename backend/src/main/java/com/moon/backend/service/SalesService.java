@@ -47,11 +47,19 @@ public class SalesService {
                 now,
                 coalesce(request.getDescription(), "销售发票过账"),
                 "SALES_INVOICE",
-                request.getInvoiceNo()
+                request.getInvoiceGuid() != null ? request.getInvoiceGuid() : request.getInvoiceNo()
         );
 
         insertSplit(txGuid, ar.getGuid(), cents, request.getDescription());
         insertSplit(txGuid, revenue.getGuid(), -cents, request.getDescription());
+
+        if (request.getInvoiceGuid() != null && !request.getInvoiceGuid().isBlank()) {
+            jdbcTemplate.update(
+                    "UPDATE invoices SET status = 'POSTED', post_txn_guid = ? WHERE guid = ?",
+                    txGuid,
+                    request.getInvoiceGuid()
+            );
+        }
     }
 
     /**
@@ -80,11 +88,23 @@ public class SalesService {
                 now,
                 coalesce(request.getDescription(), "销售收款过账"),
                 "SALES_RECEIPT",
-                request.getReceiptNo()
+                request.getInvoiceGuid() != null ? request.getInvoiceGuid() : request.getReceiptNo()
         );
 
         insertSplit(txGuid, cash.getGuid(), cents, request.getDescription());
         insertSplit(txGuid, ar.getGuid(), -cents, request.getDescription());
+
+        if (hasText(request.getInvoiceGuid())) {
+            jdbcTemplate.update(
+                    "UPDATE invoices SET status = 'APPROVED' WHERE guid = ?",
+                    request.getInvoiceGuid()
+            );
+            jdbcTemplate.update(
+                    "UPDATE invoices SET notes = CONCAT(COALESCE(notes,''), ?) WHERE guid = ?",
+                    " | 已收款金额(分):" + cents,
+                    request.getInvoiceGuid()
+            );
+        }
     }
 
     private void insertSplit(String txGuid, String accountGuid, long cents, String memo) {
@@ -116,5 +136,9 @@ public class SalesService {
 
     private String coalesce(String v, String def) {
         return (v == null || v.isBlank()) ? def : v;
+    }
+
+    private boolean hasText(String v) {
+        return v != null && !v.isBlank();
     }
 }

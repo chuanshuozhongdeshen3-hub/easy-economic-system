@@ -19,6 +19,16 @@ public class PurchaseInvoicePostRequest {
     private String invoiceNo;
 
     /**
+     * 关联的采购发票 GUID，可选，用于回写状态
+     */
+    private String invoiceGuid;
+
+    /**
+     * 关联的采购订单 GUID，可选，仅记录来源
+     */
+    private String orderGuid;
+
+    /**
      * 含税金额，人民币元
      */
     @NotNull
