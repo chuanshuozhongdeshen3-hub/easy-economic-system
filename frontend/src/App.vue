@@ -87,12 +87,23 @@ const selectAction = (module: string, action: string) => {
         <div class="action-card">
           <div class="action-header">
             <h3>员工费用</h3>
-            <p>档案/项目、报销审批、应付/支付</p>
+            <p>档案/项目、报销审批、应付支付</p>
           </div>
           <div class="action-buttons">
             <button type="button" @click="selectAction('员工费用', '员工档案')">员工档案</button>
             <button type="button" @click="selectAction('员工费用', '报销/差旅')">报销/差旅</button>
             <button type="button" @click="selectAction('员工费用', '过账')">过账</button>
+          </div>
+        </div>
+        <div class="action-card">
+          <div class="action-header">
+            <h3>报表</h3>
+            <p>利润表、资产负债表、现金流量表</p>
+          </div>
+          <div class="action-buttons">
+            <button type="button" @click="selectAction('报表', '利润表')">利润表</button>
+            <button type="button" @click="selectAction('报表', '资产负债表')">资产负债表</button>
+            <button type="button" @click="selectAction('报表', '现金流量表')">现金流量表</button>
           </div>
         </div>
       </section>
@@ -129,6 +140,9 @@ const selectAction = (module: string, action: string) => {
           :book-guid="session.bookGuid"
           :action="selection.action"
         />
+        <div v-else-if="selection.module === '报表'" class="placeholder">
+          <p>报表制作入口：{{ selection.action }}（接口：/api/reports/...，后续可接入渲染）。</p>
+        </div>
         <div v-else class="placeholder">
           <p>功能即将接入：{{ selection.module }} - {{ selection.action }}</p>
         </div>
