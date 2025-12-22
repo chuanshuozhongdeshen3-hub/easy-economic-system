@@ -61,7 +61,8 @@ watch(
 
 const formatMoney = (v: any) => {
   const num = Number(v || 0)
-  return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const formatted = num.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return `¥${formatted}`
 }
 
 const expanded = ref<Set<string>>(new Set())

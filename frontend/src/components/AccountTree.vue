@@ -54,7 +54,7 @@ const loadTree = async () => {
     const nodes: AccountNode[] = data.data.map((n: any) => ({
       ...n,
       balance: Number(n.balance ?? 0),
-      expanded: true,
+      expanded: false,
       children: markExpanded(n.children || [])
     }))
     tree.value = nodes
@@ -215,12 +215,22 @@ const AccountNodeRow = defineComponent({
     node: {
       type: Object as () => AccountNode,
       required: true
+    },
+    level: {
+      type: Number,
+      default: 0
     }
   },
   emits: ['toggle', 'create', 'edit', 'remove', 'related'],
   setup(props, { emit }) {
-    const format = (value: number) =>
-      (value ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const format = (value: number) => {
+      const num = Number(value ?? 0)
+      const abs = Math.abs(num).toLocaleString('zh-CN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      })
+      return num < 0 ? `¥-${abs}` : `¥${abs}`
+    }
 
     const onToggle = () => emit('toggle', props.node)
     const onCreate = () => emit('create', props.node)
@@ -228,29 +238,37 @@ const AccountNodeRow = defineComponent({
     const onRemove = () => emit('remove', props.node)
     const onRelated = () => emit('related', props.node)
 
+    const rowClass = ['row', props.level === 0 ? 'root-row' : 'child-row', `level-${Math.min(props.level, 3)}`]
+    const indentPx = `${props.level * 16}px`
+
     return () =>
       h('div', {}, [
-        h('div', { class: 'row' }, [
-          h('div', { class: 'left' }, [
-            props.node.children.length
-              ? h(
-                  'button',
-                  { class: 'toggle', onClick: onToggle },
-                  props.node.expanded ? '-' : '+'
-                )
-              : null,
-            h('span', { class: 'name' }, props.node.name),
-            props.node.code ? h('span', { class: 'code' }, props.node.code) : null,
-            props.node.description ? h('span', { class: 'desc' }, props.node.description) : null
+        h('div', { class: rowClass }, [
+          h('div', { class: 'row-head' }, [
+            h('div', { class: 'left', style: { marginLeft: indentPx } }, [
+              props.node.children.length
+                ? h(
+                    'button',
+                    { class: 'toggle', onClick: onToggle, 'aria-label': '展开/收起' },
+                    props.node.expanded ? 'v' : '>'
+                  )
+                : h('span', { class: 'toggle placeholder' }, '.'),
+              h('span', { class: 'icon' }, props.level === 0 ? '*' : '+'),
+              h('span', { class: 'name' }, props.node.name),
+              props.node.code ? h('span', { class: 'code' }, props.node.code) : null,
+              props.node.description ? h('span', { class: 'desc' }, props.node.description) : null
+            ]),
+            h(
+              'span',
+              { class: ['balance', props.node.balance < 0 ? 'negative' : 'positive'], style: { marginLeft: indentPx } },
+              format(props.node.balance)
+            )
           ]),
-          h('div', { class: 'right' }, [
-            h('span', { class: 'balance' }, format(props.node.balance)),
+          h('div', { class: 'row-actions', style: { paddingLeft: `${props.level * 16 + 34}px` } }, [
             h('button', { class: 'ghost', onClick: onCreate }, '新增'),
             h('button', { class: 'ghost', onClick: onEdit }, '编辑'),
             h('button', { class: 'ghost', onClick: onRelated }, '查看'),
-            !props.node.children.length
-              ? h('button', { class: 'ghost danger', onClick: onRemove }, '删除')
-              : null
+            !props.node.children.length ? h('button', { class: 'ghost danger', onClick: onRemove }, '删除') : null
           ])
         ]),
         props.node.children.length && props.node.expanded
@@ -260,6 +278,7 @@ const AccountNodeRow = defineComponent({
               props.node.children.map((child) =>
                 h(AccountNodeRow, {
                   node: child,
+                  level: props.level + 1,
                   onToggle: (n: AccountNode) => emit('toggle', n),
                   onCreate: (n: AccountNode) => emit('create', n),
                   onEdit: (n: AccountNode) => emit('edit', n),
@@ -290,6 +309,7 @@ const AccountNodeRow = defineComponent({
         v-for="node in tree"
         :key="node.guid"
         :node="node"
+        :level="0"
         @toggle="toggle"
         @create="openCreate"
         @edit="openEdit"
@@ -298,69 +318,84 @@ const AccountNodeRow = defineComponent({
       />
     </div>
 
-    <div class="drawer" v-if="createForm.parentGuid">
-      <h3>新增下级科目</h3>
-      <p class="muted">父级科目类型：{{ createForm.accountType }}</p>
-      <form class="form" @submit.prevent="submitCreate">
-        <label class="field">
-          <span>科目名称</span>
-          <input v-model.trim="createForm.name" type="text" required placeholder="请输入科目名称" />
-        </label>
-        <label class="field">
-          <span>编码（可选）</span>
-          <input v-model.trim="createForm.code" type="text" placeholder="例：1001" />
-        </label>
-        <label class="field">
-          <span>描述（可选）</span>
-          <textarea v-model.trim="createForm.description" rows="2" placeholder="备注信息" />
-        </label>
-        <div class="actions">
-          <button type="submit">创建</button>
-          <button type="button" class="ghost" @click="createForm.parentGuid = ''">取消</button>
-        </div>
-      </form>
-    </div>
-
-    <div class="drawer" v-if="editing.guid">
-      <h3>编辑科目</h3>
-      <form class="form" @submit.prevent="submitEdit">
-        <label class="field">
-          <span>科目名称</span>
-          <input v-model.trim="editing.name" type="text" required />
-        </label>
-        <label class="field">
-          <span>编码（可选）</span>
-          <input v-model.trim="editing.code" type="text" />
-        </label>
-        <label class="field">
-          <span>描述（可选）</span>
-          <textarea v-model.trim="editing.description" rows="2" />
-        </label>
-        <div class="actions">
-          <button type="submit">保存</button>
-          <button type="button" class="ghost" @click="editing.guid = ''">取消</button>
-        </div>
-      </form>
-    </div>
-
-    <div class="drawer" v-if="related.accountGuid">
-      <h3>科目关联：{{ related.accountName }}</h3>
-      <p class="muted">展示引用该科目的订单 / 发票 / 交易</p>
-      <p v-if="related.message" class="message">{{ related.message }}</p>
-      <div v-if="related.loading">加载中...</div>
-      <ul v-else class="related-list">
-        <li v-for="item in related.items" :key="item.docType + item.docId + item.docDate">
-          <span class="badge">{{ item.docType }}</span>
-          <div class="info">
-            <div class="line">
-              <strong>{{ item.docId || '未命名' }}</strong>
-              <span class="muted">{{ item.docDate }}</span>
-            </div>
-            <div class="muted small">{{ item.description || '无描述' }}</div>
+    <div v-if="createForm.parentGuid" class="modal-mask" @click.self="createForm.parentGuid = ''">
+      <div class="modal">
+        <header class="modal-header">
+          <h3>新增下级科目</h3>
+          <button class="close" type="button" @click="createForm.parentGuid = ''">×</button>
+        </header>
+        <p class="muted">父级科目类型：{{ createForm.accountType }}</p>
+        <form class="form" @submit.prevent="submitCreate">
+          <label class="field">
+            <span>科目名称</span>
+            <input v-model.trim="createForm.name" type="text" required placeholder="请输入科目名称" />
+          </label>
+          <label class="field">
+            <span>编码（可选）</span>
+            <input v-model.trim="createForm.code" type="text" placeholder="例：1001" />
+          </label>
+          <label class="field">
+            <span>描述（可选）</span>
+            <textarea v-model.trim="createForm.description" rows="2" placeholder="备注信息" />
+          </label>
+          <div class="actions">
+            <button type="submit">创建</button>
+            <button type="button" class="ghost" @click="createForm.parentGuid = ''">取消</button>
           </div>
-        </li>
-        <li v-if="!related.items.length" class="muted">暂无关联记录</li>
-      </ul>
+        </form>
+      </div>
+    </div>
+
+    <div v-if="editing.guid" class="modal-mask" @click.self="editing.guid = ''">
+      <div class="modal">
+        <header class="modal-header">
+          <h3>编辑科目</h3>
+          <button class="close" type="button" @click="editing.guid = ''">×</button>
+        </header>
+        <form class="form" @submit.prevent="submitEdit">
+          <label class="field">
+            <span>科目名称</span>
+            <input v-model.trim="editing.name" type="text" required />
+          </label>
+          <label class="field">
+            <span>编码（可选）</span>
+            <input v-model.trim="editing.code" type="text" />
+          </label>
+          <label class="field">
+            <span>描述（可选）</span>
+            <textarea v-model.trim="editing.description" rows="2" />
+          </label>
+          <div class="actions">
+            <button type="submit">保存</button>
+            <button type="button" class="ghost" @click="editing.guid = ''">取消</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div v-if="related.accountGuid" class="modal-mask" @click.self="related.accountGuid = ''">
+      <div class="modal">
+        <header class="modal-header">
+          <h3>科目关联：{{ related.accountName }}</h3>
+          <button class="close" type="button" @click="related.accountGuid = ''">×</button>
+        </header>
+        <p class="muted">展示引用该科目的订单 / 发票 / 交易</p>
+        <p v-if="related.message" class="message">{{ related.message }}</p>
+        <div v-if="related.loading">加载中...</div>
+        <ul v-else class="related-list">
+          <li v-for="item in related.items" :key="item.docType + item.docId + item.docDate">
+            <span class="badge">{{ item.docType }}</span>
+            <div class="info">
+              <div class="line">
+                <strong>{{ item.docId || '未命名' }}</strong>
+                <span class="muted">{{ item.docDate }}</span>
+              </div>
+              <div class="muted small">{{ item.description || '无描述' }}</div>
+            </div>
+          </li>
+          <li v-if="!related.items.length" class="muted">暂无关联记录</li>
+        </ul>
+      </div>
     </div>
   </div>
 </template>
@@ -383,26 +418,28 @@ const AccountNodeRow = defineComponent({
 }
 
 .muted {
-  color: #64748b;
+  color: #475569;
   font-size: 13px;
 }
 
 .message {
   margin: 10px 0;
-  color: #0ea5e9;
+  color: #0f172a;
 }
 
 .tree {
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  padding: 8px 12px;
-  background: #f8fafc;
+  padding: 8px 10px;
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.02);
 }
 
 .row {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 6px;
   padding: 8px 4px;
   border-bottom: 1px solid #e2e8f0;
 }
@@ -411,24 +448,63 @@ const AccountNodeRow = defineComponent({
   border-bottom: none;
 }
 
+.root-row {
+  font-size: 15px;
+}
+
+.child-row {
+  font-size: 14px;
+}
+
+.row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
 .left {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .toggle {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 8px;
   border: 1px solid #cbd5e1;
   background: #fff;
+  color: #0f172a;
   cursor: pointer;
+}
+
+.toggle.placeholder {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  background: transparent;
+  border-color: transparent;
+  color: #cbd5e1;
+}
+
+.icon {
+  color: #475569;
 }
 
 .name {
   font-weight: 700;
   color: #0f172a;
+  white-space: nowrap;
+}
+
+.root-row .name {
+  font-size: 16px;
+}
+
+.child-row .name {
+  color: #1f2937;
 }
 
 .code {
@@ -444,43 +520,55 @@ const AccountNodeRow = defineComponent({
   font-size: 12px;
 }
 
-.right {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .balance {
   font-weight: 700;
   color: #0f172a;
-  min-width: 120px;
+  min-width: 160px;
   text-align: right;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.balance.negative {
+  color: #b91c1c;
+}
+
+.balance.positive {
+  color: #0f172a;
+}
+
+.ops {
+  display: flex;
+  gap: 6px;
+}
+
+.row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .ghost {
   padding: 6px 10px;
   border-radius: 8px;
-  border: 1px solid #cbd5e1;
-  background: #fff;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #e2e8f0;
   cursor: pointer;
 }
 
 .ghost.danger {
   border-color: #f87171;
-  color: #b91c1c;
+  color: #fca5a5;
+}
+
+.ghost:hover {
+  border-color: #38bdf8;
 }
 
 .children {
-  margin-left: 24px;
-  border-left: 2px dashed #e2e8f0;
-}
-
-.drawer {
-  margin-top: 16px;
-  padding: 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  background: #f8fafc;
+  margin-left: 0;
+  border-left: none;
 }
 
 .form {
@@ -493,7 +581,7 @@ const AccountNodeRow = defineComponent({
   display: flex;
   flex-direction: column;
   gap: 6px;
-  color: #0f172a;
+  color: #e2e8f0;
   font-weight: 600;
 }
 
@@ -503,6 +591,7 @@ textarea {
   border-radius: 8px;
   border: 1px solid #cbd5e1;
   background: #fff;
+  color: #0f172a;
 }
 
 .actions {
@@ -515,7 +604,7 @@ button {
 }
 
 button.ghost {
-  background: #fff;
+  background: #0f172a;
 }
 
 .related-list {
@@ -535,7 +624,7 @@ button.ghost {
 
 .badge {
   background: #e0f2fe;
-  color: #0369a1;
+  color: #0f172a;
   border-radius: 6px;
   padding: 4px 6px;
   font-size: 12px;
@@ -551,5 +640,42 @@ button.ghost {
 
 .small {
   font-size: 12px;
+}
+
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  padding: 16px;
+}
+
+.modal {
+  width: min(560px, 90vw);
+  background: #0c1428;
+  border: 1px solid #1f2937;
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.close {
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
 }
 </style>

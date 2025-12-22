@@ -32,7 +32,7 @@ const switchMode = (next: Mode) => {
   message.value = ''
 }
 
-const titleText = computed(() => (mode.value === 'login' ? '登录到账本' : '注册新账本'))
+const titleText = computed(() => (mode.value === 'login' ? '登录到账务系统' : '注册新账本'))
 const actionText = computed(() => (mode.value === 'login' ? '登录' : '注册并创建账本'))
 
 const buildPayload = () => {
@@ -87,8 +87,11 @@ const submit = async () => {
 
 <template>
   <div class="panel">
-    <h1>{{ titleText }}</h1>
-    <p class="subtitle">简易财务练手项目，注册时将自动初始化你的企业账本。</p>
+    <div class="panel-header">
+      <p class="eyebrow">凭证入口</p>
+      <h1>{{ titleText }}</h1>
+      <p class="subtitle">轻量财务系统，注册时将自动初始化企业账本。</p>
+    </div>
 
     <div class="mode-toggle">
       <button :class="{ active: mode === 'login' }" type="button" @click="switchMode('login')">登录</button>
@@ -120,19 +123,19 @@ const submit = async () => {
 
         <label class="field">
           <span>企业规模（可选）</span>
-          <input v-model.trim="form.bookSize" type="text" name="bookSize" placeholder="如：50人以下" />
+          <input v-model.trim="form.bookSize" type="text" name="bookSize" placeholder="如：50 人以内" />
         </label>
 
         <div class="inline">
           <label class="field">
-            <span>注册资本（元，必填，示例 1000000）</span>
+            <span>注册资本（元，示例 1000000）</span>
             <input
               v-model.number="form.registeredCapitalNum"
               type="number"
               min="1"
               step="1"
               name="registeredCapitalNum"
-              placeholder="单位：元，示例 1000000"
+              placeholder="单位：元，例如 1000000"
               required
             />
           </label>
@@ -148,7 +151,7 @@ const submit = async () => {
               max="12"
               step="1"
               name="fiscalYearStartMonth"
-              placeholder="示例：1"
+              placeholder="例如：1"
             />
           </label>
           <label class="field">
@@ -160,7 +163,7 @@ const submit = async () => {
               max="31"
               step="1"
               name="fiscalYearStartDay"
-              placeholder="示例：1"
+              placeholder="例如：1"
             />
           </label>
         </div>
@@ -184,19 +187,20 @@ const submit = async () => {
   max-width: 560px;
   margin: 0 auto;
   padding: 32px;
-  background: #ffffff;
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
   border-radius: 16px;
+  border: 1px solid #e2e8f0;
   box-shadow: 0 12px 40px rgba(15, 23, 42, 0.12);
 }
 
-h1 {
-  margin: 0;
+.panel-header h1 {
+  margin: 4px 0 10px;
   font-size: 26px;
   color: #0f172a;
 }
 
 .subtitle {
-  margin: 8px 0 24px;
+  margin: 4px 0 16px;
   color: #475569;
 }
 
@@ -268,6 +272,10 @@ input:focus {
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
+.submit:hover {
+  transform: translateY(-1px);
+}
+
 .submit:disabled {
   opacity: 0.7;
   cursor: not-allowed;
@@ -287,5 +295,13 @@ input:focus {
   border: 1px dashed #cbd5e1;
   border-radius: 10px;
   padding: 10px 12px;
+}
+
+.eyebrow {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 0;
 }
 </style>
