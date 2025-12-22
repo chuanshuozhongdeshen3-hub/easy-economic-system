@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 
 const props = defineProps<{
   bookGuid: string
@@ -34,6 +34,7 @@ const payForm = reactive({
   cashAccountName: '',
   description: ''
 })
+const employeeOptions = ref<{ guid: string; name: string }[]>([])
 
 watch(
   () => props.action,
@@ -67,6 +68,8 @@ const saveEmployee = async () => {
     const data = await res.json()
     if (!res.ok || !data.success) throw new Error(data.message || '创建失败')
     message.value = `员工创建成功，GUID：${data.data}`
+    await loadEmployees()
+    window.dispatchEvent(new Event('employees-updated'))
   } catch (e) {
     message.value = e instanceof Error ? e.message : '创建失败'
   } finally {
@@ -130,6 +133,28 @@ const submitPay = async () => {
     loading.value = false
   }
 }
+
+const loadEmployees = async () => {
+  if (!props.bookGuid) return
+  try {
+    const res = await fetch(`${apiBase}/api/business/employees?bookGuid=${props.bookGuid}`)
+    const data = await res.json()
+    if (!res.ok || !data.success) throw new Error()
+    employeeOptions.value = data.data || []
+  } catch {
+    employeeOptions.value = []
+  }
+}
+
+onMounted(loadEmployees)
+watch(
+  () => props.bookGuid,
+  (v) => v && loadEmployees()
+)
+
+onMounted(() => {
+  window.addEventListener('employees-updated', loadEmployees)
+})
 </script>
 
 <template>
@@ -168,8 +193,11 @@ const submitPay = async () => {
 
     <div v-else-if="action === '报销/差旅'" class="form">
       <label class="field">
-        <span>员工 GUID</span>
-        <input v-model.trim="expenseForm.employeeGuid" type="text" placeholder="员工 GUID" />
+        <span>员工</span>
+        <select v-model="expenseForm.employeeGuid">
+          <option value="">请选择员工</option>
+          <option v-for="e in employeeOptions" :key="e.guid" :value="e.guid">{{ e.name }}</option>
+        </select>
       </label>
       <label class="field">
         <span>金额（元）</span>
@@ -184,8 +212,11 @@ const submitPay = async () => {
 
     <div v-else class="form">
       <label class="field">
-        <span>员工 GUID</span>
-        <input v-model.trim="payForm.employeeGuid" type="text" placeholder="员工 GUID" />
+        <span>员工</span>
+        <select v-model="payForm.employeeGuid">
+          <option value="">请选择员工</option>
+          <option v-for="e in employeeOptions" :key="e.guid" :value="e.guid">{{ e.name }}</option>
+        </select>
       </label>
       <label class="field">
         <span>金额（元）</span>

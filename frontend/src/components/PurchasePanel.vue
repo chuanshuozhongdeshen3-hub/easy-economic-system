@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 
 const props = defineProps<{
   bookGuid: string
@@ -25,6 +25,8 @@ const paymentForm = reactive({
   description: '',
   cashAccountName: ''
 })
+const orderOptions = ref<{ guid: string; name: string }[]>([])
+const invoiceOptions = ref<{ guid: string; name: string }[]>([])
 
 const postInvoice = async () => {
   if (!props.bookGuid) return
@@ -47,6 +49,8 @@ const postInvoice = async () => {
     const data = await res.json()
     if (!res.ok || !data.success) throw new Error(data.message || '过账失败')
     message.value = '采购发票过账成功'
+    await loadOrders()
+    await loadInvoices()
   } catch (e) {
     message.value = e instanceof Error ? e.message : '过账失败'
   } finally {
@@ -74,12 +78,51 @@ const postPayment = async () => {
     const data = await res.json()
     if (!res.ok || !data.success) throw new Error(data.message || '付款过账失败')
     message.value = '采购付款过账成功'
+    await loadInvoices()
   } catch (e) {
     message.value = e instanceof Error ? e.message : '付款过账失败'
   } finally {
     loading.value = false
   }
 }
+
+const loadOrders = async () => {
+  if (!props.bookGuid) return
+  try {
+    const res = await fetch(`${apiBase}/api/business/purchase/orders?bookGuid=${props.bookGuid}`)
+    const data = await res.json()
+    if (!res.ok || !data.success) throw new Error()
+    orderOptions.value = data.data || []
+  } catch {
+    orderOptions.value = []
+  }
+}
+
+const loadInvoices = async () => {
+  if (!props.bookGuid) return
+  try {
+    const res = await fetch(`${apiBase}/api/business/purchase/invoices?bookGuid=${props.bookGuid}`)
+    const data = await res.json()
+    if (!res.ok || !data.success) throw new Error()
+    invoiceOptions.value = data.data || []
+  } catch {
+    invoiceOptions.value = []
+  }
+}
+
+onMounted(() => {
+  loadOrders()
+  loadInvoices()
+})
+watch(
+  () => props.bookGuid,
+  (v) => {
+    if (v) {
+      loadOrders()
+      loadInvoices()
+    }
+  }
+)
 </script>
 
 <template>
@@ -95,8 +138,11 @@ const postPayment = async () => {
         <input v-model.trim="invoiceForm.invoiceGuid" type="text" placeholder="发票 GUID" />
       </label>
       <label class="field">
-        <span>订单 GUID（可选）</span>
-        <input v-model.trim="invoiceForm.orderGuid" type="text" placeholder="订单 GUID" />
+        <span>订单（可选）</span>
+        <select v-model="invoiceForm.orderGuid">
+          <option value="">请选择订单</option>
+          <option v-for="o in orderOptions" :key="o.guid" :value="o.guid">{{ o.name || o.guid }}</option>
+        </select>
       </label>
       <label class="field">
         <span>金额（元，含税）</span>
@@ -121,7 +167,10 @@ const postPayment = async () => {
       </label>
       <label class="field">
         <span>发票 GUID（可选，用于结算）</span>
-        <input v-model.trim="paymentForm.invoiceGuid" type="text" placeholder="发票 GUID" />
+        <select v-model="paymentForm.invoiceGuid">
+          <option value="">请选择发票</option>
+          <option v-for="i in invoiceOptions" :key="i.guid" :value="i.guid">{{ i.name || i.guid }}</option>
+        </select>
       </label>
       <label class="field">
         <span>金额（元）</span>

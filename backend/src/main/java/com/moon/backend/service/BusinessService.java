@@ -3,6 +3,7 @@ package com.moon.backend.service;
 import com.moon.backend.dto.CustomerRequest;
 import com.moon.backend.dto.EntryBatchRequest;
 import com.moon.backend.dto.EntryItemRequest;
+import com.moon.backend.dto.NameIdResponse;
 import com.moon.backend.dto.PurchaseOrderRequest;
 import com.moon.backend.dto.SalesInvoiceCreateRequest;
 import com.moon.backend.dto.VendorRequest;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -102,6 +104,54 @@ public class BusinessService {
                 request.getNotes()
         );
         return invoiceGuid;
+    }
+
+    public List<NameIdResponse> listVendors(String bookGuid) {
+        return jdbcTemplate.query(
+                "SELECT guid, name FROM vendors WHERE book_guid = ?",
+                (rs, i) -> new NameIdResponse(rs.getString("guid"), rs.getString("name")),
+                bookGuid
+        );
+    }
+
+    public List<NameIdResponse> listCustomers(String bookGuid) {
+        return jdbcTemplate.query(
+                "SELECT guid, name FROM customers WHERE book_guid = ?",
+                (rs, i) -> new NameIdResponse(rs.getString("guid"), rs.getString("name")),
+                bookGuid
+        );
+    }
+
+    public List<NameIdResponse> listEmployees(String bookGuid) {
+        return jdbcTemplate.query(
+                "SELECT guid, name FROM employees WHERE book_guid = ?",
+                (rs, i) -> new NameIdResponse(rs.getString("guid"), rs.getString("name")),
+                bookGuid
+        );
+    }
+
+    public List<NameIdResponse> listPurchaseOrders(String bookGuid) {
+        return jdbcTemplate.query(
+                "SELECT guid, id AS name FROM orders WHERE book_guid = ? AND order_type = 'PURCHASE'",
+                (rs, i) -> new NameIdResponse(rs.getString("guid"), rs.getString("name")),
+                bookGuid
+        );
+    }
+
+    public List<NameIdResponse> listSalesInvoices(String bookGuid) {
+        return jdbcTemplate.query(
+                "SELECT guid, id AS name FROM invoices WHERE book_guid = ? AND invoice_type = 'SALES'",
+                (rs, i) -> new NameIdResponse(rs.getString("guid"), rs.getString("name")),
+                bookGuid
+        );
+    }
+
+    public List<NameIdResponse> listPurchaseInvoices(String bookGuid) {
+        return jdbcTemplate.query(
+                "SELECT guid, id AS name FROM invoices WHERE book_guid = ? AND invoice_type = 'PURCHASE'",
+                (rs, i) -> new NameIdResponse(rs.getString("guid"), rs.getString("name")),
+                bookGuid
+        );
     }
 
     @Transactional

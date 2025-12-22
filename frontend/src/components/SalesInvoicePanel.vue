@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 
 const message = ref('')
 const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
@@ -16,6 +16,8 @@ const entryForm = reactive({
   description: ''
 })
 const entries = ref<{ accountGuid: string; amount: number; description: string }[]>([])
+const accounts = ref<{ guid: string; name: string }[]>([])
+const customers = ref<{ guid: string; name: string }[]>([])
 
 const submit = async () => {
   if (!props.bookGuid) {
@@ -41,6 +43,7 @@ const submit = async () => {
     if (entries.value.length) {
       await submitEntries(data.data)
     }
+    window.dispatchEvent(new Event('sales-invoices-updated'))
   } catch (e) {
     message.value = e instanceof Error ? e.message : '创建失败'
   } finally {
@@ -79,6 +82,54 @@ const submitEntries = async (invoiceGuid: string) => {
   const data = await res.json()
   if (!res.ok || !data.success) throw new Error(data.message || '行项创建失败')
 }
+
+const loadAccounts = async () => {
+  if (!props.bookGuid) return
+  try {
+    const res = await fetch(`${apiBase}/api/accounts/tree?bookGuid=${props.bookGuid}`)
+    const data = await res.json()
+    if (!res.ok || !data.success) throw new Error()
+    const flat: { guid: string; name: string }[] = []
+    const walk = (nodes: any[]) => {
+      nodes.forEach((n) => {
+        flat.push({ guid: n.guid, name: n.name })
+        if (n.children?.length) walk(n.children)
+      })
+    }
+    walk(data.data || [])
+    accounts.value = flat
+  } catch {
+    accounts.value = []
+  }
+}
+
+const loadCustomers = async () => {
+  if (!props.bookGuid) return
+  try {
+    const res = await fetch(`${apiBase}/api/business/customers?bookGuid=${props.bookGuid}`)
+    const data = await res.json()
+    if (!res.ok || !data.success) throw new Error()
+    customers.value = data.data || []
+  } catch {
+    customers.value = []
+  }
+}
+
+onMounted(loadAccounts)
+watch(
+  () => props.bookGuid,
+  (v) => {
+    if (v) {
+      loadAccounts()
+      loadCustomers()
+    }
+  }
+)
+
+// 监听客户更新事件
+onMounted(() => {
+  window.addEventListener('customers-updated', loadCustomers)
+})
 </script>
 
 <template>
@@ -91,7 +142,10 @@ const submitEntries = async (invoiceGuid: string) => {
       </label>
       <label class="field">
         <span>客户</span>
-        <input v-model.trim="form.customerGuid" type="text" placeholder="客户 GUID" />
+        <select v-model="form.customerGuid">
+          <option value="">请选择客户</option>
+          <option v-for="c in customers" :key="c.guid" :value="c.guid">{{ c.name }}</option>
+        </select>
       </label>
       <label class="field">
         <span>备注</span>
@@ -103,8 +157,11 @@ const submitEntries = async (invoiceGuid: string) => {
       <h4>行项</h4>
       <div class="entry-form">
         <label class="field">
-          <span>科目 GUID</span>
-          <input v-model.trim="entryForm.accountGuid" type="text" placeholder="科目 GUID" />
+          <span>科目</span>
+          <select v-model="entryForm.accountGuid">
+            <option value="">请选择科目</option>
+            <option v-for="a in accounts" :key="a.guid" :value="a.guid">{{ a.name }}</option>
+          </select>
         </label>
         <label class="field">
           <span>金额（元）</span>
@@ -147,6 +204,12 @@ input {
   padding: 10px;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
+}
+select {
+  padding: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
 }
 button {
   padding: 10px;

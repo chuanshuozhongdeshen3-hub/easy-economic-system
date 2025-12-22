@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 
 const message = ref('')
 const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
@@ -13,6 +13,7 @@ const form = reactive({
   addr: '',
   notes: ''
 })
+const customers = ref<{ guid: string; name: string }[]>([])
 
 const submit = async () => {
   if (!props.bookGuid) {
@@ -39,12 +40,32 @@ const submit = async () => {
     const data = await res.json()
     if (!res.ok || !data.success) throw new Error(data.message || '创建失败')
     message.value = '客户创建成功'
+    await loadCustomers()
+    window.dispatchEvent(new Event('customers-updated'))
   } catch (e) {
     message.value = e instanceof Error ? e.message : '创建失败'
   } finally {
     loading.value = false
   }
 }
+
+const loadCustomers = async () => {
+  if (!props.bookGuid) return
+  try {
+    const res = await fetch(`${apiBase}/api/business/customers?bookGuid=${props.bookGuid}`)
+    const data = await res.json()
+    if (!res.ok || !data.success) throw new Error()
+    customers.value = data.data || []
+  } catch {
+    customers.value = []
+  }
+}
+
+onMounted(loadCustomers)
+watch(
+  () => props.bookGuid,
+  (v) => v && loadCustomers()
+)
 </script>
 
 <template>
@@ -77,7 +98,13 @@ const submit = async () => {
   </label>
       <button type="button" @click="submit" :disabled="loading">保存</button>
 </div>
-<p v-if="message" class="message">{{ message }}</p>
+    <p v-if="message" class="message">{{ message }}</p>
+    <div class="list" v-if="customers.length">
+      <p class="title">已有客户：</p>
+      <ul>
+        <li v-for="c in customers" :key="c.guid">{{ c.name }} ({{ c.guid }})</li>
+      </ul>
+    </div>
   </div>
 </template>
 
@@ -116,5 +143,13 @@ button {
   margin-top: 8px;
   color: #0ea5e9;
   font-weight: 600;
+}
+.list {
+  margin-top: 10px;
+  color: #334155;
+  font-size: 14px;
+}
+.title {
+  margin: 0 0 4px;
 }
 </style>

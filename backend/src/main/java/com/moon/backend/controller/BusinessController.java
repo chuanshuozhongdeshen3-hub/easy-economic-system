@@ -3,6 +3,7 @@ package com.moon.backend.controller;
 import com.moon.backend.dto.ApiResponse;
 import com.moon.backend.dto.CustomerRequest;
 import com.moon.backend.dto.EntryBatchRequest;
+import com.moon.backend.dto.NameIdResponse;
 import com.moon.backend.dto.PurchaseOrderRequest;
 import com.moon.backend.dto.SalesInvoiceCreateRequest;
 import com.moon.backend.dto.VendorRequest;
@@ -15,6 +16,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -34,6 +37,36 @@ public class BusinessController {
     public ResponseEntity<ApiResponse<String>> createCustomer(@Valid @RequestBody CustomerRequest request) {
         String guid = businessService.createCustomer(request);
         return ResponseEntity.ok(ApiResponse.ok("客户创建成功", guid));
+    }
+
+    @GetMapping("/vendors")
+    public ResponseEntity<ApiResponse<java.util.List<NameIdResponse>>> listVendors(@RequestParam String bookGuid) {
+        return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listVendors(bookGuid)));
+    }
+
+    @GetMapping("/customers")
+    public ResponseEntity<ApiResponse<java.util.List<NameIdResponse>>> listCustomers(@RequestParam String bookGuid) {
+        return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listCustomers(bookGuid)));
+    }
+
+    @GetMapping("/employees")
+    public ResponseEntity<ApiResponse<java.util.List<NameIdResponse>>> listEmployees(@RequestParam String bookGuid) {
+        return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listEmployees(bookGuid)));
+    }
+
+    @GetMapping("/purchase/orders")
+    public ResponseEntity<ApiResponse<java.util.List<NameIdResponse>>> listPurchaseOrders(@RequestParam String bookGuid) {
+        return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listPurchaseOrders(bookGuid)));
+    }
+
+    @GetMapping("/sales/invoices")
+    public ResponseEntity<ApiResponse<java.util.List<NameIdResponse>>> listSalesInvoices(@RequestParam String bookGuid) {
+        return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listSalesInvoices(bookGuid)));
+    }
+
+    @GetMapping("/purchase/invoices")
+    public ResponseEntity<ApiResponse<java.util.List<NameIdResponse>>> listPurchaseInvoices(@RequestParam String bookGuid) {
+        return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listPurchaseInvoices(bookGuid)));
     }
 
     @PostMapping("/purchase/orders")

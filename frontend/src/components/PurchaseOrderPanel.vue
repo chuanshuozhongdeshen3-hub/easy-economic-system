@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 
 const message = ref('')
 const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
@@ -10,6 +10,8 @@ const form = reactive({
   vendorGuid: '',
   description: ''
 })
+const accounts = ref<{ guid: string; name: string }[]>([])
+const vendorOptions = ref<{ guid: string; name: string }[]>([])
 const entryForm = reactive({
   accountGuid: '',
   amount: 0,
@@ -42,6 +44,7 @@ const submit = async () => {
     if (entries.value.length) {
       await submitEntries(data.data)
     }
+    await loadVendors()
   } catch (e) {
     message.value = e instanceof Error ? e.message : '创建失败'
   } finally {
@@ -80,6 +83,53 @@ const submitEntries = async (orderGuid: string) => {
   const data = await res.json()
   if (!res.ok || !data.success) throw new Error(data.message || '行项创建失败')
 }
+
+const loadAccounts = async () => {
+  if (!props.bookGuid) return
+  try {
+    const res = await fetch(`${apiBase}/api/accounts/tree?bookGuid=${props.bookGuid}`)
+    const data = await res.json()
+    if (!res.ok || !data.success) throw new Error()
+    const flat: { guid: string; name: string }[] = []
+    const walk = (nodes: any[]) => {
+      nodes.forEach((n) => {
+        flat.push({ guid: n.guid, name: n.name })
+        if (n.children?.length) walk(n.children)
+      })
+    }
+    walk(data.data || [])
+    accounts.value = flat
+  } catch {
+    accounts.value = []
+  }
+}
+
+const loadVendors = async () => {
+  if (!props.bookGuid) return
+  try {
+    const res = await fetch(`${apiBase}/api/business/vendors?bookGuid=${props.bookGuid}`)
+    const data = await res.json()
+    if (!res.ok || !data.success) throw new Error()
+    vendorOptions.value = data.data || []
+  } catch {
+    vendorOptions.value = []
+  }
+}
+
+onMounted(() => {
+  loadAccounts()
+  loadVendors()
+  window.addEventListener('vendors-updated', loadVendors)
+})
+watch(
+  () => props.bookGuid,
+  (v) => {
+    if (v) {
+      loadAccounts()
+      loadVendors()
+    }
+  }
+)
 </script>
 
 <template>
@@ -91,8 +141,11 @@ const submitEntries = async (orderGuid: string) => {
         <input v-model.trim="form.orderNo" type="text" placeholder="PO-001" />
       </label>
       <label class="field">
-        <span>供应商 GUID</span>
-        <input v-model.trim="form.vendorGuid" type="text" placeholder="供应商 GUID" />
+        <span>供应商</span>
+        <select v-model="form.vendorGuid">
+          <option value="">请选择供应商</option>
+          <option v-for="v in vendorOptions" :key="v.guid" :value="v.guid">{{ v.name }}</option>
+        </select>
       </label>
       <label class="field">
         <span>备注</span>
@@ -104,8 +157,11 @@ const submitEntries = async (orderGuid: string) => {
       <h4>行项</h4>
       <div class="entry-form">
         <label class="field">
-          <span>科目 GUID</span>
-          <input v-model.trim="entryForm.accountGuid" type="text" placeholder="科目 GUID" />
+          <span>科目</span>
+          <select v-model="entryForm.accountGuid">
+            <option value="">请选择科目</option>
+            <option v-for="a in accounts" :key="a.guid" :value="a.guid">{{ a.name }}</option>
+          </select>
         </label>
         <label class="field">
           <span>金额（元）</span>
@@ -148,6 +204,12 @@ input {
   padding: 10px;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
+}
+select {
+  padding: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
 }
 button {
   padding: 10px;

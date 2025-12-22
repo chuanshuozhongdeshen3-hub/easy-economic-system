@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 
 const message = ref('')
 const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
@@ -8,10 +8,13 @@ const form = reactive({
   name: '',
   taxId: '',
   email: '',
-  phone: ''
+  phone: '',
+  addr: '',
+  notes: ''
 })
 
 const loading = ref(false)
+const suppliers = ref<{ guid: string; name: string }[]>([])
 
 const submit = async () => {
   if (!props.bookGuid) {
@@ -38,12 +41,32 @@ const submit = async () => {
     const data = await res.json()
     if (!res.ok || !data.success) throw new Error(data.message || '创建失败')
     message.value = '供应商创建成功'
+    await loadSuppliers()
+    window.dispatchEvent(new Event('vendors-updated'))
   } catch (e) {
     message.value = e instanceof Error ? e.message : '创建失败'
   } finally {
     loading.value = false
   }
 }
+
+const loadSuppliers = async () => {
+  if (!props.bookGuid) return
+  try {
+    const res = await fetch(`${apiBase}/api/business/vendors?bookGuid=${props.bookGuid}`)
+    const data = await res.json()
+    if (!res.ok || !data.success) throw new Error()
+    suppliers.value = data.data || []
+  } catch {
+    suppliers.value = []
+  }
+}
+
+onMounted(loadSuppliers)
+watch(
+  () => props.bookGuid,
+  (v) => v && loadSuppliers()
+)
 </script>
 
 <template>
@@ -75,6 +98,12 @@ const submit = async () => {
         <input v-model.trim="form.notes" type="text" placeholder="备注" />
       </label>
       <button type="button" @click="submit" :disabled="loading">保存</button>
+    </div>
+    <div class="list" v-if="suppliers.length">
+      <p class="title">已有供应商：</p>
+      <ul>
+        <li v-for="s in suppliers" :key="s.guid">{{ s.name }} ({{ s.guid }})</li>
+      </ul>
     </div>
     <p v-if="message" class="message">{{ message }}</p>
   </div>
@@ -115,5 +144,13 @@ button {
   margin-top: 8px;
   color: #0ea5e9;
   font-weight: 600;
+}
+.list {
+  margin-top: 10px;
+  color: #334155;
+  font-size: 14px;
+}
+.title {
+  margin: 0 0 4px;
 }
 </style>

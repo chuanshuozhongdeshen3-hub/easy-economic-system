@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 
 const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
 const props = defineProps<{ bookGuid: string }>()
@@ -20,6 +20,7 @@ const receiptForm = reactive({
   description: '',
   cashAccountName: ''
 })
+const invoiceOptions = ref<{ guid: string; name: string }[]>([])
 
 const postInvoice = async () => {
   if (!props.bookGuid) return
@@ -72,6 +73,28 @@ const postReceipt = async () => {
     loading.value = false
   }
 }
+
+const loadInvoices = async () => {
+  if (!props.bookGuid) return
+  try {
+    const res = await fetch(`${apiBase}/api/business/sales/invoices?bookGuid=${props.bookGuid}`)
+    const data = await res.json()
+    if (!res.ok || !data.success) throw new Error()
+    invoiceOptions.value = data.data || []
+  } catch {
+    invoiceOptions.value = []
+  }
+}
+
+onMounted(loadInvoices)
+watch(
+  () => props.bookGuid,
+  (v) => v && loadInvoices()
+)
+
+onMounted(() => {
+  window.addEventListener('sales-invoices-updated', loadInvoices)
+})
 </script>
 
 <template>
@@ -100,8 +123,11 @@ const postReceipt = async () => {
         <input v-model.trim="receiptForm.receiptNo" type="text" placeholder="RCV-001" />
       </label>
       <label class="field">
-        <span>发票 GUID（可选，用于结算）</span>
-        <input v-model.trim="receiptForm.invoiceGuid" type="text" placeholder="发票 GUID" />
+        <span>发票（可选，用于结算）</span>
+        <select v-model="receiptForm.invoiceGuid">
+          <option value="">请选择发票</option>
+          <option v-for="i in invoiceOptions" :key="i.guid" :value="i.guid">{{ i.name || i.guid }}</option>
+        </select>
       </label>
       <label class="field">
         <span>金额（元）</span>
