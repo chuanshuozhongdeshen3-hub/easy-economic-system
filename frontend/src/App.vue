@@ -64,25 +64,25 @@ const selectAction = (module: string, action: string) => {
         <div class="action-card">
           <div class="action-header">
             <h3>采购</h3>
-            <p>供应商、订单、对账、过账</p>
+            <p>供应商、订单、支付、过账</p>
           </div>
           <div class="action-buttons">
             <button type="button" @click="selectAction('采购', '新增供应商')">新增供应商</button>
             <button type="button" @click="selectAction('采购', '新增订单')">新增订单</button>
-            <button type="button" @click="selectAction('采购', '对账')">对账</button>
             <button type="button" @click="selectAction('采购', '过账')">过账</button>
+            <button type="button" @click="selectAction('采购', '支付')">支付</button>
           </div>
         </div>
         <div class="action-card">
           <div class="action-header">
             <h3>销售</h3>
-            <p>客户、销售单/发票、对账、过账</p>
+            <p>客户、销售单/发票、过账、收款</p>
           </div>
           <div class="action-buttons">
             <button type="button" @click="selectAction('销售', '新增发票')">新增发票</button>
             <button type="button" @click="selectAction('销售', '新增客户')">新增客户</button>
-            <button type="button" @click="selectAction('销售', '对账')">对账</button>
             <button type="button" @click="selectAction('销售', '过账')">过账</button>
+            <button type="button" @click="selectAction('销售', '收款')">收款</button>
           </div>
         </div>
         <div class="action-card">
@@ -93,7 +93,7 @@ const selectAction = (module: string, action: string) => {
           <div class="action-buttons">
             <button type="button" @click="selectAction('员工费用', '员工档案')">员工档案</button>
             <button type="button" @click="selectAction('员工费用', '报销/差旅')">报销/差旅</button>
-            <button type="button" @click="selectAction('员工费用', '过账')">过账</button>
+            <button type="button" @click="selectAction('员工费用', '支付')">支付</button>
           </div>
         </div>
         <div class="action-card">
@@ -117,25 +117,14 @@ const selectAction = (module: string, action: string) => {
           </div>
           <button class="link" type="button" @click="selection.module = selection.action = ''">关闭</button>
         </div>
-        <PurchasePanel v-if="selection.module === '采购' && selection.action === '过账'" :book-guid="session.bookGuid" />
+        <PurchasePanel v-if="selection.module === '采购' && selection.action === '过账'" :book-guid="session.bookGuid" mode="post" />
+        <PurchasePanel v-else-if="selection.module === '采购' && selection.action === '支付'" :book-guid="session.bookGuid" mode="pay" />
         <SupplierPanel v-else-if="selection.module === '采购' && selection.action === '新增供应商'" :book-guid="session.bookGuid" />
         <PurchaseOrderPanel v-else-if="selection.module === '采购' && selection.action === '新增订单'" :book-guid="session.bookGuid" />
-        <ReconcilePanel
-          v-else-if="selection.module === '采购' && selection.action === '对账'"
-          :module="selection.module"
-          :action="selection.action"
-          :book-guid="session.bookGuid"
-        />
-
         <SalesInvoicePanel v-else-if="selection.module === '销售' && selection.action === '新增发票'" :book-guid="session.bookGuid" />
         <CustomerPanel v-else-if="selection.module === '销售' && selection.action === '新增客户'" :book-guid="session.bookGuid" />
-        <ReconcilePanel
-          v-else-if="selection.module === '销售' && selection.action === '对账'"
-          :module="selection.module"
-          :action="selection.action"
-          :book-guid="session.bookGuid"
-        />
-        <SalesPanel v-else-if="selection.module === '销售' && selection.action === '过账'" :book-guid="session.bookGuid" />
+        <SalesPanel v-else-if="selection.module === '销售' && selection.action === '过账'" :book-guid="session.bookGuid" mode="invoice" />
+        <SalesPanel v-else-if="selection.module === '销售' && selection.action === '收款'" :book-guid="session.bookGuid" mode="receipt" />
         <EmployeeExpensePanel
           v-else-if="selection.module === '员工费用'"
           :book-guid="session.bookGuid"

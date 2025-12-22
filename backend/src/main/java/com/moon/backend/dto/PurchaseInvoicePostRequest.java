@@ -5,6 +5,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 /**
  * 采购发票过账请求
  */
@@ -44,4 +46,14 @@ public class PurchaseInvoicePostRequest {
      * 费用/存货科目名称，未传则优先使用“存货”，否则“管理费用”
      */
     private String debitAccountName;
+
+    /**
+     * 应付科目名称（可选，默认应付账款）
+     */
+    private String payableAccountName;
+
+    /**
+     * 入账时间（可选），未传则用当前时间
+     */
+    private LocalDateTime postDate;
 }

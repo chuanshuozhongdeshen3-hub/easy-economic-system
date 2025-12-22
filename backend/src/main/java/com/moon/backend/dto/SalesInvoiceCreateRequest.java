@@ -17,6 +17,11 @@ public class SalesInvoiceCreateRequest {
     private String invoiceId;
 
     /**
+     * 项目/作业 GUID（可选）
+     */
+    private String jobGuid;
+
+    /**
      * 备注
      */
     private String notes;

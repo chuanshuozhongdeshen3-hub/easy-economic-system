@@ -1,29 +1,40 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'
+import { onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 
 const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
-const props = defineProps<{ bookGuid: string }>()
+const props = defineProps<{ bookGuid: string; mode?: 'invoice' | 'receipt' }>()
 
 const message = ref('')
 const loading = ref(false)
 
 const invoiceForm = reactive({
+  invoiceGuid: '',
   invoiceNo: '',
   amount: 0,
-  description: ''
+  description: '',
+  receivableAccountName: '应收账款'
 })
+const postDate = ref(new Date().toISOString().slice(0, 10))
 
 const receiptForm = reactive({
   receiptNo: '',
   invoiceGuid: '',
   amount: 0,
   description: '',
-  cashAccountName: ''
+  cashAccountName: '银行存款',
+  receiptDate: new Date().toISOString().slice(0, 10)
 })
+
+type AccountOption = { guid: string; name: string; accountType: string }
 const invoiceOptions = ref<{ guid: string; name: string }[]>([])
+const accounts = ref<AccountOption[]>([])
 
 const postInvoice = async () => {
   if (!props.bookGuid) return
+  if (!invoiceForm.invoiceGuid) {
+    message.value = '请选择待过账的销售发票'
+    return
+  }
   loading.value = true
   message.value = ''
   try {
@@ -32,14 +43,23 @@ const postInvoice = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         bookGuid: props.bookGuid,
+        invoiceGuid: invoiceForm.invoiceGuid,
         invoiceNo: invoiceForm.invoiceNo || null,
         amountCent: Math.round(Number(invoiceForm.amount) * 100),
-        description: invoiceForm.description || null
+        description: invoiceForm.description || null,
+        receivableAccountName: invoiceForm.receivableAccountName || null,
+        postDate: postDate.value ? `${postDate.value}T00:00:00` : null
       })
     })
     const data = await res.json()
     if (!res.ok || !data.success) throw new Error(data.message || '发票过账失败')
     message.value = '销售发票过账成功'
+    invoiceForm.amount = 0
+    invoiceForm.description = ''
+    invoiceForm.invoiceNo = ''
+    invoiceForm.invoiceGuid = ''
+    postDate.value = new Date().toISOString().slice(0, 10)
+    await loadInvoices()
   } catch (e) {
     message.value = e instanceof Error ? e.message : '发票过账失败'
   } finally {
@@ -49,6 +69,10 @@ const postInvoice = async () => {
 
 const postReceipt = async () => {
   if (!props.bookGuid) return
+  if (!receiptForm.invoiceGuid) {
+    message.value = '请选择要结算的发票'
+    return
+  }
   loading.value = true
   message.value = ''
   try {
@@ -61,12 +85,19 @@ const postReceipt = async () => {
         amountCent: Math.round(Number(receiptForm.amount) * 100),
         description: receiptForm.description || null,
         invoiceGuid: receiptForm.invoiceGuid || null,
-        cashAccountName: receiptForm.cashAccountName || null
+        cashAccountName: receiptForm.cashAccountName || null,
+        receiptDate: receiptForm.receiptDate ? `${receiptForm.receiptDate}T00:00:00` : null
       })
     })
     const data = await res.json()
     if (!res.ok || !data.success) throw new Error(data.message || '收款过账失败')
-    message.value = '销售收款过账成功'
+    message.value = '销售收款记录成功'
+    receiptForm.receiptNo = ''
+    receiptForm.amount = 0
+    receiptForm.description = ''
+    receiptForm.cashAccountName = '银行存款'
+    receiptForm.receiptDate = new Date().toISOString().slice(0, 10)
+    await loadInvoices()
   } catch (e) {
     message.value = e instanceof Error ? e.message : '收款过账失败'
   } finally {
@@ -76,8 +107,9 @@ const postReceipt = async () => {
 
 const loadInvoices = async () => {
   if (!props.bookGuid) return
+  const status = (props.mode ?? 'invoice') === 'invoice' ? 'DRAFT' : 'POSTED'
   try {
-    const res = await fetch(`${apiBase}/api/business/sales/invoices?bookGuid=${props.bookGuid}`)
+    const res = await fetch(`${apiBase}/api/business/sales/invoices?bookGuid=${props.bookGuid}&status=${status}`)
     const data = await res.json()
     if (!res.ok || !data.success) throw new Error()
     invoiceOptions.value = data.data || []
@@ -86,21 +118,60 @@ const loadInvoices = async () => {
   }
 }
 
+const loadAccounts = async () => {
+  if (!props.bookGuid) return
+  try {
+    const res = await fetch(`${apiBase}/api/accounts/tree?bookGuid=${props.bookGuid}`)
+    const data = await res.json()
+    if (!res.ok || !data.success) throw new Error()
+    const flat: AccountOption[] = []
+    const walk = (nodes: any[]) => {
+      nodes.forEach((n) => {
+        flat.push({ guid: n.guid, name: n.name, accountType: n.accountType })
+        if (n.children?.length) walk(n.children)
+      })
+    }
+    walk(data.data || [])
+    accounts.value = flat
+  } catch {
+    accounts.value = []
+  }
+}
+
 onMounted(loadInvoices)
+onMounted(loadAccounts)
 watch(
   () => props.bookGuid,
-  (v) => v && loadInvoices()
+  (v) => {
+    if (v) {
+      loadInvoices()
+      loadAccounts()
+    }
+  }
 )
 
 onMounted(() => {
   window.addEventListener('sales-invoices-updated', loadInvoices)
 })
+
+onUnmounted(() => {
+  window.removeEventListener('sales-invoices-updated', loadInvoices)
+})
 </script>
 
 <template>
   <div class="panel">
-    <h3>销售发票过账</h3>
-    <form class="form" @submit.prevent="postInvoice">
+    <h3 v-if="(props.mode ?? 'invoice') === 'invoice'">销售发票过账</h3>
+    <h3 v-else>销售收款</h3>
+
+    <form v-if="(props.mode ?? 'invoice') === 'invoice'" class="form" @submit.prevent="postInvoice">
+      <label class="field">
+        <span>发票（未过账）</span>
+        <select v-model="invoiceForm.invoiceGuid" required>
+          <option value="">请选择发票</option>
+          <option v-for="i in invoiceOptions" :key="i.guid" :value="i.guid">{{ i.name || i.guid }}</option>
+        </select>
+      </label>
       <label class="field">
         <span>发票号（可选）</span>
         <input v-model.trim="invoiceForm.invoiceNo" type="text" placeholder="SI-001" />
@@ -110,20 +181,36 @@ onMounted(() => {
         <input v-model.number="invoiceForm.amount" type="number" min="0" step="0.01" required />
       </label>
       <label class="field">
+        <span>入账日期</span>
+        <input v-model="postDate" type="date" />
+      </label>
+      <label class="field">
+        <span>入账科目（资产类，默认应收账款）</span>
+        <select v-model="invoiceForm.receivableAccountName">
+          <option value="">请选择科目（默认应收账款）</option>
+          <option
+            v-for="a in accounts.filter((x) => x.accountType === 'ASSET')"
+            :key="a.guid"
+            :value="a.name"
+          >
+            {{ a.name }}
+          </option>
+        </select>
+      </label>
+      <label class="field">
         <span>备注</span>
         <input v-model.trim="invoiceForm.description" type="text" placeholder="销售说明" />
       </label>
       <button type="submit" :disabled="loading">过账发票</button>
     </form>
 
-    <h3>销售收款过账</h3>
-    <form class="form" @submit.prevent="postReceipt">
+    <form v-else class="form" @submit.prevent="postReceipt">
       <label class="field">
         <span>收款单号（可选）</span>
         <input v-model.trim="receiptForm.receiptNo" type="text" placeholder="RCV-001" />
       </label>
       <label class="field">
-        <span>发票（可选，用于结算）</span>
+        <span>发票（已过账）</span>
         <select v-model="receiptForm.invoiceGuid">
           <option value="">请选择发票</option>
           <option v-for="i in invoiceOptions" :key="i.guid" :value="i.guid">{{ i.name || i.guid }}</option>
@@ -135,13 +222,26 @@ onMounted(() => {
       </label>
       <label class="field">
         <span>收款账户（默认银行存款）</span>
-        <input v-model.trim="receiptForm.cashAccountName" type="text" placeholder="银行存款" />
+        <select v-model="receiptForm.cashAccountName">
+          <option value="">请选择科目（默认银行存款）</option>
+          <option
+            v-for="a in accounts.filter((x) => x.accountType === 'ASSET')"
+            :key="a.guid"
+            :value="a.name"
+          >
+            {{ a.name }}
+          </option>
+        </select>
+      </label>
+      <label class="field">
+        <span>收款日期</span>
+        <input v-model="receiptForm.receiptDate" type="date" />
       </label>
       <label class="field">
         <span>备注</span>
         <input v-model.trim="receiptForm.description" type="text" placeholder="收款说明" />
       </label>
-      <button type="submit" :disabled="loading">过账收款</button>
+      <button type="submit" :disabled="loading">提交收款</button>
     </form>
 
     <p v-if="message" class="message">{{ message }}</p>
@@ -154,11 +254,6 @@ onMounted(() => {
   border-radius: 12px;
   padding: 12px;
   background: #f8fafc;
-}
-
-h3 {
-  margin: 12px 0 8px;
-  color: #0f172a;
 }
 
 .form {
@@ -176,7 +271,8 @@ h3 {
   color: #0f172a;
 }
 
-input {
+input,
+select {
   padding: 10px;
   border-radius: 8px;
   border: 1px solid #cbd5e1;

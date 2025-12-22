@@ -5,6 +5,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 /**
  * 采购付款过账请求
  */
@@ -44,4 +46,14 @@ public class PurchasePaymentRequest {
      * 付款账户名称，未传则默认“银行存款”
      */
     private String cashAccountName;
+
+    /**
+     * 关联的采购订单（已过账）GUID，可选
+     */
+    private String orderGuid;
+
+    /**
+     * 支付日期（可选），未传则使用当前时间
+     */
+    private LocalDateTime payDate;
 }

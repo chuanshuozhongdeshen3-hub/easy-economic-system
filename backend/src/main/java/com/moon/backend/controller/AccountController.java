@@ -4,6 +4,7 @@ import com.moon.backend.dto.AccountNodeResponse;
 import com.moon.backend.dto.ApiResponse;
 import com.moon.backend.dto.CreateAccountRequest;
 import com.moon.backend.dto.UpdateAccountRequest;
+import com.moon.backend.dto.RelatedDocResponse;
 import com.moon.backend.entity.Account;
 import com.moon.backend.service.AccountService;
 import jakarta.validation.Valid;
@@ -33,6 +34,12 @@ public class AccountController {
     public ResponseEntity<ApiResponse<List<AccountNodeResponse>>> getTree(@RequestParam String bookGuid) {
         List<AccountNodeResponse> tree = accountService.getAccountTree(bookGuid);
         return ResponseEntity.ok(ApiResponse.ok("查询成功", tree));
+    }
+
+    @GetMapping("/{guid}/related")
+    public ResponseEntity<ApiResponse<List<RelatedDocResponse>>> relatedDocs(@PathVariable String guid, @RequestParam String bookGuid) {
+        List<RelatedDocResponse> docs = accountService.listRelatedDocs(bookGuid, guid);
+        return ResponseEntity.ok(ApiResponse.ok("查询成功", docs));
     }
 
     @PostMapping

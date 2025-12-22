@@ -34,6 +34,13 @@ const editing = reactive({
   code: '',
   description: ''
 })
+const related = reactive({
+  accountGuid: '',
+  accountName: '',
+  loading: false,
+  message: '',
+  items: [] as { docType: string; docId: string; docDate: string; description: string }[]
+})
 
 const loadTree = async () => {
   loading.value = true
@@ -166,6 +173,32 @@ const remove = async (node: AccountNode) => {
   }
 }
 
+const loadRelated = async (node: AccountNode) => {
+  if (!node.guid) return
+  related.accountGuid = node.guid
+  related.accountName = node.name
+  related.loading = true
+  related.message = ''
+  related.items = []
+  try {
+    const res = await fetch(`${apiBase}/api/accounts/${node.guid}/related?bookGuid=${props.bookGuid}`)
+    const data = await res.json()
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || '查询失败')
+    }
+    related.items = (data.data || []).map((d: any) => ({
+      docType: d.docType,
+      docId: d.docId,
+      docDate: d.docDate ? String(d.docDate).replace('T', ' ') : '',
+      description: d.description || ''
+    }))
+  } catch (error) {
+    related.message = error instanceof Error ? error.message : '查询失败'
+  } finally {
+    related.loading = false
+  }
+}
+
 const formatMoney = (value: number) =>
   (value ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -187,7 +220,7 @@ const AccountNodeRow = defineComponent({
       required: true
     }
   },
-  emits: ['toggle', 'create', 'edit', 'remove'],
+  emits: ['toggle', 'create', 'edit', 'remove', 'related'],
   setup(props, { emit }) {
     const format = (value: number) =>
       (value ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -196,6 +229,7 @@ const AccountNodeRow = defineComponent({
     const onCreate = () => emit('create', props.node)
     const onEdit = () => emit('edit', props.node)
     const onRemove = () => emit('remove', props.node)
+    const onRelated = () => emit('related', props.node)
 
     return () =>
       h('div', {}, [
@@ -216,6 +250,7 @@ const AccountNodeRow = defineComponent({
             h('span', { class: 'balance' }, format(props.node.balance)),
             h('button', { class: 'ghost', onClick: onCreate }, '新增'),
             h('button', { class: 'ghost', onClick: onEdit }, '编辑'),
+            h('button', { class: 'ghost', onClick: onRelated }, '查看'),
             !props.node.children.length
               ? h('button', { class: 'ghost danger', onClick: onRemove }, '删除')
               : null
@@ -231,7 +266,8 @@ const AccountNodeRow = defineComponent({
                   onToggle: (n: AccountNode) => emit('toggle', n),
                   onCreate: (n: AccountNode) => emit('create', n),
                   onEdit: (n: AccountNode) => emit('edit', n),
-                  onRemove: (n: AccountNode) => emit('remove', n)
+                  onRemove: (n: AccountNode) => emit('remove', n),
+                  onRelated: (n: AccountNode) => emit('related', n)
                 })
               )
             )
@@ -245,7 +281,7 @@ const AccountNodeRow = defineComponent({
   <div class="accounts">
     <div class="toolbar">
       <h2>科目列表</h2>
-      <span class="muted">默认展开总账科目，点击可查看下级科目</span>
+      <span class="muted">默认展开一级科目，点击可查看下级科目</span>
     </div>
 
     <p v-if="message" class="message">{{ message }}</p>
@@ -261,6 +297,7 @@ const AccountNodeRow = defineComponent({
         @create="openCreate"
         @edit="openEdit"
         @remove="remove"
+        @related="loadRelated"
       />
     </div>
 
@@ -274,7 +311,7 @@ const AccountNodeRow = defineComponent({
         </label>
         <label class="field">
           <span>编码（可选）</span>
-          <input v-model.trim="createForm.code" type="text" placeholder="如：1001" />
+          <input v-model.trim="createForm.code" type="text" placeholder="例：1001" />
         </label>
         <label class="field">
           <span>描述（可选）</span>
@@ -307,6 +344,26 @@ const AccountNodeRow = defineComponent({
           <button type="button" class="ghost" @click="editing.guid = ''">取消</button>
         </div>
       </form>
+    </div>
+
+    <div class="drawer" v-if="related.accountGuid">
+      <h3>科目关联：{{ related.accountName }}</h3>
+      <p class="muted">展示引用该科目的订单 / 发票 / 交易</p>
+      <p v-if="related.message" class="message">{{ related.message }}</p>
+      <div v-if="related.loading">加载中...</div>
+      <ul v-else class="related-list">
+        <li v-for="item in related.items" :key="item.docType + item.docId + item.docDate">
+          <span class="badge">{{ item.docType }}</span>
+          <div class="info">
+            <div class="line">
+              <strong>{{ item.docId || '未命名' }}</strong>
+              <span class="muted">{{ item.docDate }}</span>
+            </div>
+            <div class="muted small">{{ item.description || '无描述' }}</div>
+          </div>
+        </li>
+        <li v-if="!related.items.length" class="muted">暂无关联记录</li>
+      </ul>
     </div>
   </div>
 </template>
@@ -462,5 +519,40 @@ button {
 
 button.ghost {
   background: #fff;
+}
+
+.related-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.related-list li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.badge {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 12px;
+  min-width: 68px;
+  text-align: center;
+}
+
+.info .line {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.small {
+  font-size: 12px;
 }
 </style>

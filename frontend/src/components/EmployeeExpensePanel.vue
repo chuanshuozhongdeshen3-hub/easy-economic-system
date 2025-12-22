@@ -24,17 +24,25 @@ const employeeForm = reactive({
 const expenseForm = reactive({
   employeeGuid: '',
   amount: 0,
-  description: ''
+  description: '',
+  postDate: new Date().toISOString().slice(0, 10),
+  debitAccountName: '管理费用',
+  expenseNo: ''
 })
 
 // 支付过账
 const payForm = reactive({
   employeeGuid: '',
+  expenseGuid: '',
   amount: 0,
-  cashAccountName: '',
-  description: ''
+  cashAccountName: '银行存款',
+  description: '',
+  payDate: new Date().toISOString().slice(0, 10)
 })
 const employeeOptions = ref<{ guid: string; name: string }[]>([])
+const expenseOptions = ref<{ guid: string; name: string }[]>([])
+type AccountOption = { guid: string; name: string; accountType: string }
+const accounts = ref<AccountOption[]>([])
 
 watch(
   () => props.action,
@@ -92,12 +100,21 @@ const submitExpense = async () => {
         bookGuid: props.bookGuid,
         employeeGuid: expenseForm.employeeGuid,
         amountCent: Math.round(Number(expenseForm.amount) * 100),
-        description: expenseForm.description || null
+        description: expenseForm.description || null,
+        debitAccountName: expenseForm.debitAccountName || null,
+        postDate: expenseForm.postDate ? `${expenseForm.postDate}T00:00:00` : null,
+        expenseNo: expenseForm.expenseNo || null
       })
     })
     const data = await res.json()
     if (!res.ok || !data.success) throw new Error(data.message || '报销过账失败')
     message.value = '报销/差旅过账成功'
+    expenseForm.amount = 0
+    expenseForm.description = ''
+    expenseForm.expenseNo = ''
+    expenseForm.debitAccountName = '管理费用'
+    expenseForm.postDate = new Date().toISOString().slice(0, 10)
+    await loadExpenses()
   } catch (e) {
     message.value = e instanceof Error ? e.message : '报销过账失败'
   } finally {
@@ -110,6 +127,10 @@ const submitPay = async () => {
     message.value = '缺少账本'
     return
   }
+  if (!payForm.expenseGuid) {
+    message.value = '请选择已过账编号'
+    return
+  }
   loading.value = true
   message.value = ''
   try {
@@ -119,14 +140,22 @@ const submitPay = async () => {
       body: JSON.stringify({
         bookGuid: props.bookGuid,
         employeeGuid: payForm.employeeGuid,
+        expenseGuid: payForm.expenseGuid,
         amountCent: Math.round(Number(payForm.amount) * 100),
         cashAccountName: payForm.cashAccountName || null,
-        description: payForm.description || null
+        description: payForm.description || null,
+        payDate: payForm.payDate ? `${payForm.payDate}T00:00:00` : null
       })
     })
     const data = await res.json()
     if (!res.ok || !data.success) throw new Error(data.message || '支付过账失败')
     message.value = '员工付款过账成功'
+    payForm.expenseGuid = ''
+    payForm.amount = 0
+    payForm.description = ''
+    payForm.cashAccountName = '银行存款'
+    payForm.payDate = new Date().toISOString().slice(0, 10)
+    await loadExpenses()
   } catch (e) {
     message.value = e instanceof Error ? e.message : '支付过账失败'
   } finally {
@@ -146,22 +175,59 @@ const loadEmployees = async () => {
   }
 }
 
+const loadExpenses = async () => {
+  if (!props.bookGuid) return
+  try {
+    const res = await fetch(`${apiBase}/api/employee/expenses?bookGuid=${props.bookGuid}`)
+    const data = await res.json()
+    if (!res.ok || !data.success) throw new Error()
+    expenseOptions.value = data.data || []
+  } catch {
+    expenseOptions.value = []
+  }
+}
+
 onMounted(loadEmployees)
+onMounted(loadExpenses)
 watch(
   () => props.bookGuid,
   (v) => v && loadEmployees()
 )
+watch(
+  () => props.bookGuid,
+  (v) => v && loadExpenses()
+)
 
 onMounted(() => {
   window.addEventListener('employees-updated', loadEmployees)
+})
+
+onMounted(async () => {
+  if (!props.bookGuid) return
+  try {
+    const res = await fetch(`${apiBase}/api/accounts/tree?bookGuid=${props.bookGuid}`)
+    const data = await res.json()
+    if (!res.ok || !data.success) throw new Error()
+    const flat: AccountOption[] = []
+    const walk = (nodes: any[]) => {
+      nodes.forEach((n) => {
+        flat.push({ guid: n.guid, name: n.name, accountType: n.accountType })
+        if (n.children?.length) walk(n.children)
+      })
+    }
+    walk(data.data || [])
+    accounts.value = flat
+  } catch {
+    accounts.value = []
+  }
 })
 </script>
 
 <template>
   <div class="panel">
     <h3 v-if="action === '员工档案'">员工档案</h3>
-    <h3 v-else-if="action === '报销/差旅'">报销/差旅过账</h3>
-    <h3 v-else>支付结算过账</h3>
+    <h3 v-else-if="action === '支付'">支付结算</h3>
+    <h3 v-else>报销/差旅过账</h3>
 
     <div v-if="action === '员工档案'" class="form">
       <label class="field">
@@ -200,8 +266,29 @@ onMounted(() => {
         </select>
       </label>
       <label class="field">
+        <span>报销/差旅编号（可选）</span>
+        <input v-model.trim="expenseForm.expenseNo" type="text" placeholder="EX-001" />
+      </label>
+      <label class="field">
         <span>金额（元）</span>
         <input v-model.number="expenseForm.amount" type="number" min="0" step="0.01" />
+      </label>
+      <label class="field">
+        <span>入账日期</span>
+        <input v-model="expenseForm.postDate" type="date" />
+      </label>
+      <label class="field">
+        <span>支出科目（默认管理费用）</span>
+        <select v-model="expenseForm.debitAccountName">
+          <option value="">请选择科目（默认管理费用）</option>
+          <option
+            v-for="a in accounts.filter((x) => x.accountType === 'EXPENSE')"
+            :key="a.guid"
+            :value="a.name"
+          >
+            {{ a.name }}
+          </option>
+        </select>
       </label>
       <label class="field">
         <span>描述</span>
@@ -219,18 +306,38 @@ onMounted(() => {
         </select>
       </label>
       <label class="field">
+        <span>报销编号（已过账）</span>
+        <select v-model="payForm.expenseGuid">
+          <option value="">请选择编号</option>
+          <option v-for="ex in expenseOptions" :key="ex.guid" :value="ex.guid">{{ ex.name }}</option>
+        </select>
+      </label>
+      <label class="field">
         <span>金额（元）</span>
         <input v-model.number="payForm.amount" type="number" min="0" step="0.01" />
       </label>
       <label class="field">
-        <span>付款账户（默认银行存款）</span>
-        <input v-model.trim="payForm.cashAccountName" type="text" placeholder="银行存款" />
+        <span>支付账户（转出科目，默认银行存款）</span>
+        <select v-model="payForm.cashAccountName">
+          <option value="">请选择科目（默认银行存款）</option>
+          <option
+            v-for="a in accounts.filter((x) => x.accountType === 'ASSET')"
+            :key="a.guid"
+            :value="a.name"
+          >
+            {{ a.name }}
+          </option>
+        </select>
+      </label>
+      <label class="field">
+        <span>支付日期</span>
+        <input v-model="payForm.payDate" type="date" />
       </label>
       <label class="field">
         <span>描述</span>
         <input v-model.trim="payForm.description" type="text" placeholder="支付说明" />
       </label>
-      <button type="button" @click="submitPay" :disabled="loading">过账付款</button>
+      <button type="button" @click="submitPay" :disabled="loading">提交支付</button>
     </div>
 
     <p v-if="message" class="message">{{ message }}</p>

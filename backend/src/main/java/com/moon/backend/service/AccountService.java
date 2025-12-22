@@ -220,6 +220,37 @@ public class AccountService {
         accountRepository.delete(account);
     }
 
+    /**
+     * 查询科目关联的订单/发票/交易（按日期倒序）。
+     */
+    public List<com.moon.backend.dto.RelatedDocResponse> listRelatedDocs(String bookGuid, String accountGuid) {
+        String sql = """
+                SELECT doc_type, doc_id, doc_date, description FROM (
+                  SELECT 'INVOICE' AS doc_type, i.id AS doc_id, i.date_opened AS doc_date, COALESCE(i.notes,'') AS description
+                    FROM entries e
+                    JOIN invoices i ON e.invoice_guid = i.guid
+                   WHERE e.book_guid = ? AND e.account_guid = ?
+                  UNION ALL
+                  SELECT 'ORDER' AS doc_type, o.id AS doc_id, o.date_opened AS doc_date, COALESCE(o.notes,'') AS description
+                    FROM entries e
+                    JOIN orders o ON e.order_guid = o.guid
+                   WHERE e.book_guid = ? AND e.account_guid = ?
+                  UNION ALL
+                  SELECT 'TRANSACTION' AS doc_type, COALESCE(t.num, t.guid) AS doc_id, t.post_date AS doc_date, COALESCE(t.description,'') AS description
+                    FROM splits s
+                    JOIN transactions t ON s.tx_guid = t.guid
+                   WHERE t.book_guid = ? AND s.account_guid = ?
+                ) AS doc
+                ORDER BY doc_date DESC NULLS LAST
+                """;
+        return jdbcTemplate.query(sql, (rs, i) -> new com.moon.backend.dto.RelatedDocResponse(
+                rs.getString("doc_type"),
+                rs.getString("doc_id"),
+                rs.getTimestamp("doc_date") != null ? rs.getTimestamp("doc_date").toLocalDateTime() : null,
+                rs.getString("description")
+        ), bookGuid, accountGuid, bookGuid, accountGuid, bookGuid, accountGuid);
+    }
+
     @Transactional
     protected void createDefaultAccountsIfMissing(String bookGuid) {
         Book book = bookRepository.findById(bookGuid)

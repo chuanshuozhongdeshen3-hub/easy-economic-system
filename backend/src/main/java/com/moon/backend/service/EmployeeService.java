@@ -76,10 +76,11 @@ public class EmployeeService {
 
         jdbcTemplate.update(
                 "INSERT INTO transactions (guid, book_guid, num, post_date, enter_date, description, doc_status, source_type, source_guid) " +
-                        "VALUES (?, ?, NULL, ?, ?, ?, 'POSTED', ?, ?)",
+                        "VALUES (?, ?, ?, ?, ?, ?, 'POSTED', ?, ?)",
                 txGuid,
                 bookGuid,
-                now,
+                request.getExpenseNo(),
+                request.getPostDate() != null ? request.getPostDate() : now,
                 now,
                 coalesce(request.getDescription(), "员工费用过账"),
                 "EMP_EXPENSE",
@@ -108,11 +109,11 @@ public class EmployeeService {
                         "VALUES (?, ?, NULL, ?, ?, ?, 'POSTED', ?, ?)",
                 txGuid,
                 bookGuid,
-                now,
+                request.getPayDate() != null ? request.getPayDate() : now,
                 now,
                 coalesce(request.getDescription(), "员工付款过账"),
                 "EMP_PAY",
-                request.getEmployeeGuid()
+                coalesce(request.getExpenseGuid(), request.getEmployeeGuid())
         );
 
         insertSplit(txGuid, payable.getGuid(), request.getAmountCent(), request.getDescription());
@@ -154,6 +155,21 @@ public class EmployeeService {
         }
         return resolveByName(bookGuid, "银行存款")
                 .orElseThrow(() -> new IllegalStateException("未找到“银行存款”科目"));
+    }
+
+    public java.util.List<com.moon.backend.dto.NameIdResponse> listPostedExpenses(String bookGuid) {
+        return jdbcTemplate.query(
+                """
+                SELECT guid, COALESCE(num, guid) AS name
+                  FROM transactions
+                 WHERE book_guid = ?
+                   AND source_type = 'EMP_EXPENSE'
+                   AND doc_status = 'POSTED'
+                 ORDER BY post_date DESC
+                """,
+                (rs, i) -> new com.moon.backend.dto.NameIdResponse(rs.getString("guid"), rs.getString("name")),
+                bookGuid
+        );
     }
 
     private void ensureOwner(String bookGuid, String employeeGuid, String name) {

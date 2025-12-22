@@ -77,10 +77,11 @@ public class BusinessService {
         LocalDateTime now = LocalDateTime.now();
         jdbcTemplate.update(
                 "INSERT INTO orders (guid, book_guid, owner_guid, job_guid, order_type, id, date_opened, date_closed, notes, status) " +
-                        "VALUES (?, ?, ?, NULL, 'PURCHASE', ?, ?, NULL, ?, 'DRAFT')",
+                        "VALUES (?, ?, ?, ?, 'PURCHASE', ?, ?, NULL, ?, 'DRAFT')",
                 orderGuid,
                 request.getBookGuid(),
                 ownerGuid,
+                request.getJobGuid(),
                 request.getOrderId(),
                 now,
                 request.getNotes()
@@ -95,10 +96,11 @@ public class BusinessService {
         LocalDateTime now = LocalDateTime.now();
         jdbcTemplate.update(
                 "INSERT INTO invoices (guid, book_guid, owner_guid, job_guid, invoice_type, id, date_opened, date_posted, due_date, notes, status, post_txn_guid, lot_guid) " +
-                        "VALUES (?, ?, ?, NULL, 'SALES', ?, ?, NULL, NULL, ?, 'DRAFT', NULL, NULL)",
+                        "VALUES (?, ?, ?, ?, 'SALES', ?, ?, NULL, NULL, ?, 'DRAFT', NULL, NULL)",
                 invoiceGuid,
                 request.getBookGuid(),
                 ownerGuid,
+                request.getJobGuid(),
                 request.getInvoiceId(),
                 now,
                 request.getNotes()
@@ -130,19 +132,41 @@ public class BusinessService {
         );
     }
 
-    public List<NameIdResponse> listPurchaseOrders(String bookGuid) {
+    public List<NameIdResponse> listJobs(String bookGuid) {
         return jdbcTemplate.query(
-                "SELECT guid, id AS name FROM orders WHERE book_guid = ? AND order_type = 'PURCHASE'",
+                "SELECT guid, name FROM jobs WHERE book_guid = ? AND active = 1",
                 (rs, i) -> new NameIdResponse(rs.getString("guid"), rs.getString("name")),
                 bookGuid
         );
     }
 
-    public List<NameIdResponse> listSalesInvoices(String bookGuid) {
+    public List<NameIdResponse> listPurchaseOrders(String bookGuid, String status) {
+        StringBuilder sql = new StringBuilder("SELECT guid, id AS name FROM orders WHERE book_guid = ? AND order_type = 'PURCHASE'");
+        List<Object> args = new java.util.ArrayList<>();
+        args.add(bookGuid);
+        if (status != null && !status.isBlank()) {
+            sql.append(" AND status = ?");
+            args.add(status);
+        }
         return jdbcTemplate.query(
-                "SELECT guid, id AS name FROM invoices WHERE book_guid = ? AND invoice_type = 'SALES'",
+                sql.toString(),
                 (rs, i) -> new NameIdResponse(rs.getString("guid"), rs.getString("name")),
-                bookGuid
+                args.toArray()
+        );
+    }
+
+    public List<NameIdResponse> listSalesInvoices(String bookGuid, String status) {
+        StringBuilder sql = new StringBuilder("SELECT guid, id AS name FROM invoices WHERE book_guid = ? AND invoice_type = 'SALES'");
+        List<Object> args = new java.util.ArrayList<>();
+        args.add(bookGuid);
+        if (status != null && !status.isBlank()) {
+            sql.append(" AND status = ?");
+            args.add(status);
+        }
+        return jdbcTemplate.query(
+                sql.toString(),
+                (rs, i) -> new NameIdResponse(rs.getString("guid"), rs.getString("name")),
+                args.toArray()
         );
     }
 

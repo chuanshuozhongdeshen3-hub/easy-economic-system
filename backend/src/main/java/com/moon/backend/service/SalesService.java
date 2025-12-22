@@ -32,17 +32,39 @@ public class SalesService {
     public void postInvoice(SalesInvoicePostRequest request) {
         String bookGuid = request.getBookGuid();
         if (!hasText(request.getInvoiceGuid())) {
-            throw new IllegalArgumentException("销售发票 GUID 不能为空，需按明细过账");
+            throw new IllegalArgumentException("请先选择待过账的销售发票");
         }
         Account ar = resolveByName(bookGuid, "应收账款")
-                .orElseThrow(() -> new IllegalStateException("未找到“应收账款”科目"));
+                .or(() -> resolveByName(bookGuid, request.getReceivableAccountName()))
+                .orElseThrow(() -> new IllegalStateException("未找到“应收账款”科目或指定科目"));
 
-        InvoiceCalc calc = loadInvoiceCalc(bookGuid, request.getInvoiceGuid(), true);
-        if (calc.totalCents <= 0) {
-            throw new IllegalStateException("发票行金额合计必须大于 0");
+        InvoiceCalc calc = null;
+        if (request.getInvoiceGuid() != null) {
+            try {
+                calc = loadInvoiceCalc(bookGuid, request.getInvoiceGuid(), true);
+            } catch (Exception ignored) {
+                // 如果没有明细则尝试走人工金额
+            }
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        long cents = request.getAmountCent() == null ? 0 : request.getAmountCent();
+        Map<String, Long> baseByAccount = new HashMap<>();
+        Map<String, Long> taxByAccount = new HashMap<>();
+
+        if (calc != null && calc.totalCents > 0) {
+            cents = calc.totalCents;
+            baseByAccount = calc.baseByAccount;
+            taxByAccount = calc.taxByAccount;
+        } else {
+            if (cents <= 0) {
+                throw new IllegalArgumentException("金额必须大于 0");
+            }
+            Account revenue = resolveByName(bookGuid, "主营业务收入")
+                    .orElseThrow(() -> new IllegalStateException("未找到“主营业务收入”科目"));
+            baseByAccount.put(revenue.getGuid(), cents);
+        }
+
+        LocalDateTime now = request.getPostDate() != null ? request.getPostDate() : LocalDateTime.now();
         String txGuid = UUID.randomUUID().toString();
         jdbcTemplate.update(
                 "INSERT INTO transactions (guid, book_guid, num, post_date, enter_date, description, doc_status, source_type, source_guid) " +
@@ -54,17 +76,17 @@ public class SalesService {
                 now,
                 coalesce(request.getDescription(), "销售发票过账"),
                 "SALES_INVOICE",
-                request.getInvoiceGuid() != null ? request.getInvoiceGuid() : request.getInvoiceNo()
+                request.getInvoiceGuid()
         );
 
         // 借：应收账款 = 含税总额
-        insertSplit(txGuid, ar.getGuid(), calc.totalCents, request.getDescription());
+        insertSplit(txGuid, ar.getGuid(), cents, request.getDescription());
         // 贷：收入科目（按行汇总）
-        for (Map.Entry<String, Long> entry : calc.baseByAccount.entrySet()) {
+        for (Map.Entry<String, Long> entry : baseByAccount.entrySet()) {
             insertSplit(txGuid, entry.getKey(), -entry.getValue(), request.getDescription());
         }
         // 贷：销项税
-        for (Map.Entry<String, Long> entry : calc.taxByAccount.entrySet()) {
+        for (Map.Entry<String, Long> entry : taxByAccount.entrySet()) {
             insertSplit(txGuid, entry.getKey(), -entry.getValue(), "销项税额");
         }
 
@@ -74,7 +96,12 @@ public class SalesService {
                     txGuid,
                     request.getInvoiceGuid()
             );
-            updateInvoiceSettlement(bookGuid, request.getInvoiceGuid(), "ASSET", calc.totalCents);
+            jdbcTemplate.update(
+                    "UPDATE invoices SET notes = CONCAT(COALESCE(notes,''), ?) WHERE guid = ?",
+                    " | 已过账金额分:" + cents,
+                    request.getInvoiceGuid()
+            );
+            updateInvoiceSettlement(bookGuid, request.getInvoiceGuid(), "ASSET", cents);
         }
     }
 
@@ -92,7 +119,7 @@ public class SalesService {
                 .orElseThrow(() -> new IllegalStateException("未找到“应收账款”科目"));
         Account cash = resolveCashAccount(bookGuid, request.getCashAccountName());
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = request.getReceiptDate() != null ? request.getReceiptDate() : LocalDateTime.now();
         String txGuid = UUID.randomUUID().toString();
         jdbcTemplate.update(
                 "INSERT INTO transactions (guid, book_guid, num, post_date, enter_date, description, doc_status, source_type, source_guid) " +

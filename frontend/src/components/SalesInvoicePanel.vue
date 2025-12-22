@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'
+import { onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 
 const message = ref('')
 const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
@@ -8,6 +8,7 @@ const loading = ref(false)
 const form = reactive({
   invoiceNo: '',
   customerGuid: '',
+  jobGuid: '',
   description: ''
 })
 const entryForm = reactive({
@@ -18,6 +19,7 @@ const entryForm = reactive({
 const entries = ref<{ accountGuid: string; amount: number; description: string }[]>([])
 const accounts = ref<{ guid: string; name: string }[]>([])
 const customers = ref<{ guid: string; name: string }[]>([])
+const jobOptions = ref<{ guid: string; name: string }[]>([])
 
 const submit = async () => {
   if (!props.bookGuid) {
@@ -33,6 +35,7 @@ const submit = async () => {
       body: JSON.stringify({
         bookGuid: props.bookGuid,
         customerGuid: form.customerGuid,
+        jobGuid: form.jobGuid || null,
         invoiceId: form.invoiceNo || null,
         notes: form.description || null
       })
@@ -115,13 +118,30 @@ const loadCustomers = async () => {
   }
 }
 
-onMounted(loadAccounts)
+const loadJobs = async () => {
+  if (!props.bookGuid) return
+  try {
+    const res = await fetch(`${apiBase}/api/business/jobs?bookGuid=${props.bookGuid}`)
+    const data = await res.json()
+    if (!res.ok || !data.success) throw new Error()
+    jobOptions.value = data.data || []
+  } catch {
+    jobOptions.value = []
+  }
+}
+
+onMounted(() => {
+  loadAccounts()
+  loadCustomers()
+  loadJobs()
+})
 watch(
   () => props.bookGuid,
   (v) => {
     if (v) {
       loadAccounts()
       loadCustomers()
+      loadJobs()
     }
   }
 )
@@ -129,6 +149,10 @@ watch(
 // 监听客户更新事件
 onMounted(() => {
   window.addEventListener('customers-updated', loadCustomers)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('customers-updated', loadCustomers)
 })
 </script>
 
@@ -145,6 +169,13 @@ onMounted(() => {
         <select v-model="form.customerGuid">
           <option value="">请选择客户</option>
           <option v-for="c in customers" :key="c.guid" :value="c.guid">{{ c.name }}</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>项目（可选）</span>
+        <select v-model="form.jobGuid">
+          <option value="">不选择项目</option>
+          <option v-for="j in jobOptions" :key="j.guid" :value="j.guid">{{ j.name }}</option>
         </select>
       </label>
       <label class="field">

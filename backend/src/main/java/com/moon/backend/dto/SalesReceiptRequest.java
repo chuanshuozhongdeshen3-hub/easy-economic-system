@@ -5,6 +5,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 @Data
 public class SalesReceiptRequest {
     @NotBlank
@@ -32,4 +34,9 @@ public class SalesReceiptRequest {
      * 收款账户名称，默认银行存款
      */
     private String cashAccountName;
+
+    /**
+     * 收款日期（可选），未传则当前时间
+     */
+    private LocalDateTime receiptDate;
 }

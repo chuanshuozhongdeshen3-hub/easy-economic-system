@@ -54,14 +54,21 @@ public class BusinessController {
         return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listEmployees(bookGuid)));
     }
 
+    @GetMapping("/jobs")
+    public ResponseEntity<ApiResponse<java.util.List<NameIdResponse>>> listJobs(@RequestParam String bookGuid) {
+        return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listJobs(bookGuid)));
+    }
+
     @GetMapping("/purchase/orders")
-    public ResponseEntity<ApiResponse<java.util.List<NameIdResponse>>> listPurchaseOrders(@RequestParam String bookGuid) {
-        return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listPurchaseOrders(bookGuid)));
+    public ResponseEntity<ApiResponse<java.util.List<NameIdResponse>>> listPurchaseOrders(@RequestParam String bookGuid,
+                                                                                          @RequestParam(required = false) String status) {
+        return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listPurchaseOrders(bookGuid, status)));
     }
 
     @GetMapping("/sales/invoices")
-    public ResponseEntity<ApiResponse<java.util.List<NameIdResponse>>> listSalesInvoices(@RequestParam String bookGuid) {
-        return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listSalesInvoices(bookGuid)));
+    public ResponseEntity<ApiResponse<java.util.List<NameIdResponse>>> listSalesInvoices(@RequestParam String bookGuid,
+                                                                                         @RequestParam(required = false) String status) {
+        return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listSalesInvoices(bookGuid, status)));
     }
 
     @GetMapping("/purchase/invoices")

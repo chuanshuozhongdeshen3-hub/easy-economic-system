@@ -8,10 +8,12 @@ const loading = ref(false)
 const form = reactive({
   orderNo: '',
   vendorGuid: '',
+  jobGuid: '',
   description: ''
 })
 const accounts = ref<{ guid: string; name: string }[]>([])
 const vendorOptions = ref<{ guid: string; name: string }[]>([])
+const jobOptions = ref<{ guid: string; name: string }[]>([])
 const entryForm = reactive({
   accountGuid: '',
   amount: 0,
@@ -33,6 +35,7 @@ const submit = async () => {
       body: JSON.stringify({
         bookGuid: props.bookGuid,
         vendorGuid: form.vendorGuid,
+        jobGuid: form.jobGuid || null,
         orderId: form.orderNo || null,
         notes: form.description || null
       })
@@ -45,6 +48,7 @@ const submit = async () => {
       await submitEntries(data.data)
     }
     await loadVendors()
+    await loadJobs()
   } catch (e) {
     message.value = e instanceof Error ? e.message : '创建失败'
   } finally {
@@ -116,9 +120,22 @@ const loadVendors = async () => {
   }
 }
 
+const loadJobs = async () => {
+  if (!props.bookGuid) return
+  try {
+    const res = await fetch(`${apiBase}/api/business/jobs?bookGuid=${props.bookGuid}`)
+    const data = await res.json()
+    if (!res.ok || !data.success) throw new Error()
+    jobOptions.value = data.data || []
+  } catch {
+    jobOptions.value = []
+  }
+}
+
 onMounted(() => {
   loadAccounts()
   loadVendors()
+  loadJobs()
   window.addEventListener('vendors-updated', loadVendors)
 })
 watch(
@@ -127,6 +144,7 @@ watch(
     if (v) {
       loadAccounts()
       loadVendors()
+      loadJobs()
     }
   }
 )
@@ -145,6 +163,13 @@ watch(
         <select v-model="form.vendorGuid">
           <option value="">请选择供应商</option>
           <option v-for="v in vendorOptions" :key="v.guid" :value="v.guid">{{ v.name }}</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>项目（可选）</span>
+        <select v-model="form.jobGuid">
+          <option value="">不选择项目</option>
+          <option v-for="j in jobOptions" :key="j.guid" :value="j.guid">{{ j.name }}</option>
         </select>
       </label>
       <label class="field">

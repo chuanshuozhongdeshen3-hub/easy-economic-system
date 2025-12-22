@@ -5,6 +5,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 @Data
 public class SalesInvoicePostRequest {
     @NotBlank
@@ -25,4 +27,14 @@ public class SalesInvoicePostRequest {
     private Long amountCent;
 
     private String description;
+
+    /**
+     * 应收科目名称（可选，默认应收账款）
+     */
+    private String receivableAccountName;
+
+    /**
+     * 入账时间（可选），未传则当前时间
+     */
+    private LocalDateTime postDate;
 }

@@ -31,19 +31,33 @@ public class PurchaseService {
     @Transactional
     public void postInvoice(PurchaseInvoicePostRequest request) {
         String bookGuid = request.getBookGuid();
-        if (!hasText(request.getInvoiceGuid())) {
-            throw new IllegalArgumentException("采购发票 GUID 不能为空，需按明细过账");
+        long cents;
+        Map<String, Long> baseByAccount;
+        Map<String, Long> taxByAccount;
+        if (hasText(request.getInvoiceGuid())) {
+            InvoiceCalc calc = loadInvoiceCalc(bookGuid, request.getInvoiceGuid());
+            if (calc.totalCents <= 0) {
+                throw new IllegalStateException("发票行金额合计必须大于 0");
+            }
+            cents = calc.totalCents;
+            baseByAccount = calc.baseByAccount;
+            taxByAccount = calc.taxByAccount;
+        } else {
+            // 直接根据输入金额+借方科目过账
+            cents = request.getAmountCent() == null ? 0 : request.getAmountCent();
+            if (cents <= 0) {
+                throw new IllegalArgumentException("金额必须大于 0");
+            }
+            Account debit = resolveDebitAccount(bookGuid, request.getDebitAccountName());
+            baseByAccount = new java.util.HashMap<>();
+            baseByAccount.put(debit.getGuid(), cents);
+            taxByAccount = java.util.Collections.emptyMap();
         }
 
         Account ap = resolveByName(bookGuid, "应付账款")
-                .orElseThrow(() -> new IllegalStateException("未找到“应付账款”科目"));
+                .orElseThrow(() -> new IllegalStateException("未找到“应付账款”科目或指定科目"));
 
-        InvoiceCalc calc = loadInvoiceCalc(bookGuid, request.getInvoiceGuid());
-        if (calc.totalCents <= 0) {
-            throw new IllegalStateException("发票行金额合计必须大于 0");
-        }
-
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = request.getPostDate() != null ? request.getPostDate() : LocalDateTime.now();
         String txGuid = UUID.randomUUID().toString();
 
         jdbcTemplate.update(
@@ -54,21 +68,18 @@ public class PurchaseService {
                 request.getInvoiceNo(),
                 now,
                 now,
-                coalesce(request.getDescription(), "采购发票过账"),
+                coalesce(request.getDescription(), "采购过账"),
                 "PURCHASE_INVOICE",
                 coalesce(request.getInvoiceGuid(), request.getOrderGuid())
         );
 
-        // 借：费用/库存等业务科目
-        for (Map.Entry<String, Long> entry : calc.baseByAccount.entrySet()) {
+        for (Map.Entry<String, Long> entry : baseByAccount.entrySet()) {
             insertSplit(txGuid, entry.getKey(), entry.getValue(), request.getDescription());
         }
-        // 借：进项税额
-        for (Map.Entry<String, Long> entry : calc.taxByAccount.entrySet()) {
+        for (Map.Entry<String, Long> entry : taxByAccount.entrySet()) {
             insertSplit(txGuid, entry.getKey(), entry.getValue(), "进项税额");
         }
-        // 贷：应付账款 = 含税总额
-        insertSplit(txGuid, ap.getGuid(), -calc.totalCents, request.getDescription());
+        insertSplit(txGuid, ap.getGuid(), -cents, request.getDescription());
 
         if (hasText(request.getInvoiceGuid())) {
             jdbcTemplate.update(
@@ -78,10 +89,13 @@ public class PurchaseService {
             );
             jdbcTemplate.update(
                     "UPDATE invoices SET notes = CONCAT(COALESCE(notes,''), ?) WHERE guid = ?",
-                    " | 已过账金额分:" + calc.totalCents,
+                    " | 已过账金额分:" + cents,
                     request.getInvoiceGuid()
             );
-            updateInvoiceSettlement(bookGuid, request.getInvoiceGuid(), "LIABILITY", calc.totalCents);
+            updateInvoiceSettlement(bookGuid, request.getInvoiceGuid(), "LIABILITY", cents);
+        }
+        if (hasText(request.getOrderGuid())) {
+            jdbcTemplate.update("UPDATE orders SET status = 'POSTED' WHERE guid = ?", request.getOrderGuid());
         }
     }
 
@@ -97,10 +111,10 @@ public class PurchaseService {
         }
 
         Account ap = resolveByName(bookGuid, "应付账款")
-                .orElseThrow(() -> new IllegalStateException("未找到“应付账款”科目"));
+                .orElseThrow(() -> new IllegalStateException("未找到“应付账款”科目或指定科目"));
         Account cash = resolveCashAccount(bookGuid, request.getCashAccountName());
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = request.getPayDate() != null ? request.getPayDate() : LocalDateTime.now();
         String txGuid = UUID.randomUUID().toString();
 
         jdbcTemplate.update(
@@ -111,9 +125,9 @@ public class PurchaseService {
                 request.getPayNo(),
                 now,
                 now,
-                coalesce(request.getDescription(), "采购付款过账"),
+                coalesce(request.getDescription(), "采购支付"),
                 "PURCHASE_PAYMENT",
-                coalesce(request.getInvoiceGuid(), request.getPayNo())
+                coalesce(coalesce(request.getOrderGuid(), request.getInvoiceGuid()), request.getPayNo())
         );
 
         insertSplit(txGuid, ap.getGuid(), cents, request.getDescription());
@@ -158,6 +172,17 @@ public class PurchaseService {
 
     private Optional<Account> resolveByName(String bookGuid, String name) {
         return accountRepository.findFirstByBookGuidAndName(bookGuid, name);
+    }
+
+    private Account resolveDebitAccount(String bookGuid, String preferName) {
+        if (preferName != null && !preferName.isBlank()) {
+            return resolveByName(bookGuid, preferName)
+                    .orElseThrow(() -> new IllegalArgumentException("未找到科目：" + preferName));
+        }
+        return resolveByName(bookGuid, "存货")
+                .or(() -> resolveByName(bookGuid, "主营业务成本"))
+                .or(() -> resolveByName(bookGuid, "管理费用"))
+                .orElseThrow(() -> new IllegalStateException("未找到可用的费用/存货科目"));
     }
 
     private String coalesce(String v, String def) {

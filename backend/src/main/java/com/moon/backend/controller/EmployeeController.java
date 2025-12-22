@@ -4,14 +4,17 @@ import com.moon.backend.dto.ApiResponse;
 import com.moon.backend.dto.EmployeeExpensePostRequest;
 import com.moon.backend.dto.EmployeePayRequest;
 import com.moon.backend.dto.EmployeeRequest;
+import com.moon.backend.dto.NameIdResponse;
 import com.moon.backend.service.EmployeeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -37,6 +40,11 @@ public class EmployeeController {
     public ResponseEntity<ApiResponse<Void>> postPay(@Valid @RequestBody EmployeePayRequest request) {
         employeeService.postPay(request);
         return ResponseEntity.ok(ApiResponse.ok("员工付款过账成功", null));
+    }
+
+    @GetMapping("/expenses")
+    public ResponseEntity<ApiResponse<java.util.List<NameIdResponse>>> listPostedExpenses(@RequestParam String bookGuid) {
+        return ResponseEntity.ok(ApiResponse.ok("查询成功", employeeService.listPostedExpenses(bookGuid)));
     }
 
     @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})

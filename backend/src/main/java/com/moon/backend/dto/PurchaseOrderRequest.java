@@ -16,5 +16,10 @@ public class PurchaseOrderRequest {
      */
     private String orderId;
 
+    /**
+     * 项目/作业 GUID（可选）
+     */
+    private String jobGuid;
+
     private String notes;
 }
