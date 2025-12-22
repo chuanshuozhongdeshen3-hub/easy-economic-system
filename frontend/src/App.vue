@@ -10,6 +10,7 @@ import SalesInvoicePanel from './components/SalesInvoicePanel.vue'
 import SalesPanel from './components/SalesPanel.vue'
 import ReconcilePanel from './components/ReconcilePanel.vue'
 import EmployeeExpensePanel from './components/EmployeeExpensePanel.vue'
+import ReportPanel from './components/ReportPanel.vue'
 
 const session = reactive({
   userId: localStorage.getItem('user_id') ?? '',
@@ -140,9 +141,9 @@ const selectAction = (module: string, action: string) => {
           :book-guid="session.bookGuid"
           :action="selection.action"
         />
-        <div v-else-if="selection.module === '报表'" class="placeholder">
-          <p>报表制作入口：{{ selection.action }}（接口：/api/reports/...，后续可接入渲染）。</p>
-        </div>
+        <ReportPanel v-else-if="selection.module === '报表' && selection.action === '利润表'" :book-guid="session.bookGuid" type="pl" />
+        <ReportPanel v-else-if="selection.module === '报表' && selection.action === '资产负债表'" :book-guid="session.bookGuid" type="bs" />
+        <ReportPanel v-else-if="selection.module === '报表' && selection.action === '现金流量表'" :book-guid="session.bookGuid" type="cf" />
         <div v-else class="placeholder">
           <p>功能即将接入：{{ selection.module }} - {{ selection.action }}</p>
         </div>
