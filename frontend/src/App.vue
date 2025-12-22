@@ -108,11 +108,21 @@ const selectAction = (module: string, action: string) => {
         <PurchasePanel v-if="selection.module === '采购' && selection.action === '过账'" :book-guid="session.bookGuid" />
         <SupplierPanel v-else-if="selection.module === '采购' && selection.action === '新增供应商'" :book-guid="session.bookGuid" />
         <PurchaseOrderPanel v-else-if="selection.module === '采购' && selection.action === '新增订单'" :book-guid="session.bookGuid" />
-        <ReconcilePanel v-else-if="selection.module === '采购' && selection.action === '对账'" :module="selection.module" :action="selection.action" />
+        <ReconcilePanel
+          v-else-if="selection.module === '采购' && selection.action === '对账'"
+          :module="selection.module"
+          :action="selection.action"
+          :book-guid="session.bookGuid"
+        />
 
         <SalesInvoicePanel v-else-if="selection.module === '销售' && selection.action === '新增发票'" :book-guid="session.bookGuid" />
         <CustomerPanel v-else-if="selection.module === '销售' && selection.action === '新增客户'" :book-guid="session.bookGuid" />
-        <ReconcilePanel v-else-if="selection.module === '销售' && selection.action === '对账'" :module="selection.module" :action="selection.action" />
+        <ReconcilePanel
+          v-else-if="selection.module === '销售' && selection.action === '对账'"
+          :module="selection.module"
+          :action="selection.action"
+          :book-guid="session.bookGuid"
+        />
         <SalesPanel v-else-if="selection.module === '销售' && selection.action === '过账'" :book-guid="session.bookGuid" />
         <EmployeeExpensePanel
           v-else-if="selection.module === '员工费用'"
