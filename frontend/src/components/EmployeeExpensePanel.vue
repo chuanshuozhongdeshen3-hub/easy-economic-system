@@ -41,6 +41,7 @@ const payForm = reactive({
 })
 const employeeOptions = ref<{ guid: string; name: string }[]>([])
 const expenseOptions = ref<{ guid: string; name: string }[]>([])
+const jobOptions = ref<{ guid: string; name: string }[]>([])
 type AccountOption = { guid: string; name: string; accountType: string }
 const accounts = ref<AccountOption[]>([])
 const ROOT_BLOCK = ['根账户', '资产', '负债', '所有者权益', '收入', '费用']
@@ -52,6 +53,7 @@ const assetAccounts = computed(() =>
 )
 const employeeDetails = ref<{ guid: string; name: string; note?: string }[]>([])
 const expenseDetails = ref<{ guid: string; name: string; status?: string; note?: string; date?: string; amount?: number }[]>([])
+const newProject = reactive({ name: '', description: '' })
 
 watch(
   () => props.action,
@@ -125,6 +127,7 @@ const submitExpense = async () => {
     expenseForm.postDate = new Date().toISOString().slice(0, 10)
     await loadExpenses()
     await loadExpenseDetails()
+    await loadJobs()
   } catch (e) {
     message.value = e instanceof Error ? e.message : '报销过账失败'
   } finally {
@@ -167,6 +170,7 @@ const submitPay = async () => {
     payForm.payDate = new Date().toISOString().slice(0, 10)
     await loadExpenses()
     await loadExpenseDetails()
+    await loadJobs()
   } catch (e) {
     message.value = e instanceof Error ? e.message : '支付过账失败'
   } finally {
@@ -225,9 +229,52 @@ const loadExpenseDetails = async () => {
   }
 }
 
+const loadJobs = async () => {
+  if (!props.bookGuid) return
+  try {
+    const res = await fetch(`${apiBase}/api/business/jobs?bookGuid=${props.bookGuid}`)
+    const data = await res.json()
+    if (!res.ok || !data.success) throw new Error()
+    jobOptions.value = data.data || []
+  } catch {
+    jobOptions.value = []
+  }
+}
+
+const createProject = async () => {
+  if (!props.bookGuid || !newProject.name) {
+    message.value = '请填写项目名称'
+    return
+  }
+  loading.value = true
+  message.value = ''
+  try {
+    const res = await fetch(`${apiBase}/api/business/jobs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bookGuid: props.bookGuid,
+        name: newProject.name,
+        description: newProject.description || null
+      })
+    })
+    const data = await res.json()
+    if (!res.ok || !data.success) throw new Error(data.message || '创建失败')
+    message.value = '项目创建成功'
+    newProject.name = ''
+    newProject.description = ''
+    await loadJobs()
+  } catch (e) {
+    message.value = e instanceof Error ? e.message : '创建失败'
+  } finally {
+    loading.value = false
+  }
+}
+
 onMounted(loadEmployees)
 onMounted(loadExpenses)
 onMounted(loadExpenseDetails)
+onMounted(loadJobs)
 watch(
   () => props.bookGuid,
   (v) => {
@@ -235,6 +282,7 @@ watch(
       loadEmployees()
       loadExpenses()
       loadExpenseDetails()
+      loadJobs()
     }
   }
 )
@@ -268,6 +316,7 @@ onMounted(async () => {
   <div class="panel">
     <h3 v-if="action === '员工档案'">员工档案</h3>
     <h3 v-else-if="action === '支付'">支付结算</h3>
+    <h3 v-else-if="action === '项目管理'">项目管理</h3>
     <h3 v-else>报销/差旅过账</h3>
 
     <div v-if="action === '员工档案'" class="form">
@@ -293,7 +342,10 @@ onMounted(async () => {
       </label>
       <label class="field">
         <span>项目</span>
-        <input v-model.trim="employeeForm.project" type="text" />
+        <select v-model="employeeForm.project">
+          <option value="">不选择项目</option>
+          <option v-for="j in jobOptions" :key="j.guid" :value="j.name">{{ j.name }}</option>
+        </select>
       </label>
       <button type="button" @click="saveEmployee" :disabled="loading">保存</button>
     </div>
@@ -373,12 +425,29 @@ onMounted(async () => {
       <button type="button" @click="submitPay" :disabled="loading">提交支付</button>
     </div>
 
-    <div v-else class="form">
-      <p class="muted">仅查看员工/报销列表</p>
+    <div v-else-if="action === '项目管理'" class="form">
+      <label class="field">
+        <span>项目名称</span>
+        <input v-model.trim="newProject.name" type="text" placeholder="如：市场活动A" />
+      </label>
+      <label class="field">
+        <span>项目描述（可选）</span>
+        <input v-model.trim="newProject.description" type="text" placeholder="备注" />
+      </label>
+      <button type="button" @click="createProject" :disabled="loading">新增项目</button>
     </div>
 
     <p v-if="message" class="message">{{ message }}</p>
-    <div class="list" v-if="employeeDetails.length && action !== '员工档案'">
+    <div v-if="action === '项目管理'" class="list">
+      <p class="title">项目列表</p>
+      <ul>
+        <li v-for="j in jobOptions" :key="j.guid">
+          <strong>{{ j.name }}</strong>
+          <span class="muted">ID: {{ j.guid }}</span>
+        </li>
+      </ul>
+    </div>
+    <div v-else-if="employeeDetails.length && action !== '员工档案'" class="list">
       <h4>员工列表</h4>
       <ul>
         <li v-for="e in employeeDetails" :key="e.guid">
@@ -388,7 +457,7 @@ onMounted(async () => {
         </li>
       </ul>
     </div>
-    <div class="list" v-if="expenseDetails.length && action !== '员工档案'">
+    <div v-if="expenseDetails.length && action !== '员工档案' && action !== '项目管理'" class="list">
       <h4>报销/差旅记录</h4>
       <ul>
         <li v-for="ex in expenseDetails" :key="ex.guid">

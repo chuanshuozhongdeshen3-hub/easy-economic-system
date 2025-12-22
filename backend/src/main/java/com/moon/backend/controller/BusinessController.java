@@ -6,6 +6,7 @@ import com.moon.backend.dto.EntryBatchRequest;
 import com.moon.backend.dto.NameIdResponse;
 import com.moon.backend.dto.NameStatusResponse;
 import com.moon.backend.dto.PurchaseOrderRequest;
+import com.moon.backend.dto.JobRequest;
 import com.moon.backend.dto.SalesInvoiceCreateRequest;
 import com.moon.backend.dto.VendorRequest;
 import com.moon.backend.service.BusinessService;
@@ -73,6 +74,12 @@ public class BusinessController {
     @GetMapping("/jobs")
     public ResponseEntity<ApiResponse<java.util.List<NameIdResponse>>> listJobs(@RequestParam String bookGuid) {
         return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listJobs(bookGuid)));
+    }
+
+    @PostMapping("/jobs")
+    public ResponseEntity<ApiResponse<String>> createJob(@Valid @RequestBody JobRequest request) {
+        String guid = businessService.createJob(request);
+        return ResponseEntity.ok(ApiResponse.ok("项目创建成功", guid));
     }
 
     @GetMapping("/purchase/orders")

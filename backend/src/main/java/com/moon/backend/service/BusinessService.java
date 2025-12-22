@@ -3,6 +3,7 @@ package com.moon.backend.service;
 import com.moon.backend.dto.CustomerRequest;
 import com.moon.backend.dto.EntryBatchRequest;
 import com.moon.backend.dto.EntryItemRequest;
+import com.moon.backend.dto.JobRequest;
 import com.moon.backend.dto.NameIdResponse;
 import com.moon.backend.dto.NameStatusResponse;
 import com.moon.backend.dto.PurchaseOrderRequest;
@@ -139,6 +140,23 @@ public class BusinessService {
                 (rs, i) -> new NameIdResponse(rs.getString("guid"), rs.getString("name")),
                 bookGuid
         );
+    }
+
+    @Transactional
+    public String createJob(JobRequest request) {
+        String guid = UUID.randomUUID().toString();
+        LocalDateTime now = LocalDateTime.now();
+        jdbcTemplate.update(
+                "INSERT INTO jobs (guid, book_guid, owner_guid, id, name, description, active, created_at, updated_at) " +
+                        "VALUES (?, ?, NULL, NULL, ?, ?, 1, ?, ?)",
+                guid,
+                request.getBookGuid(),
+                request.getName(),
+                request.getDescription(),
+                now,
+                now
+        );
+        return guid;
     }
 
     public List<NameIdResponse> listPurchaseOrders(String bookGuid, String status) {
