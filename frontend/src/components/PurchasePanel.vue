@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 const props = defineProps<{
   bookGuid: string
-  mode?: 'post' | 'pay'
+  mode?: 'post' | 'pay' | 'list'
 }>()
 
 const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
@@ -17,11 +17,20 @@ const orderForm = reactive({
   description: '',
   payableAccountName: '应付账款'
 })
+const panelMode = computed(() => props.mode ?? 'post')
 const postDate = ref(new Date().toISOString().slice(0, 10))
 const draftOrders = ref<{ guid: string; name: string }[]>([])
 const postedOrders = ref<{ guid: string; name: string }[]>([])
+const orderDetails = ref<{ guid: string; name: string; status?: string; note?: string; date?: string; amount?: number }[]>([])
 type AccountOption = { guid: string; name: string; accountType: string }
 const accounts = ref<AccountOption[]>([])
+const ROOT_BLOCK = ['根账户', '资产', '负债', '所有者权益', '收入', '费用']
+const liabilityAccounts = computed(() =>
+  accounts.value.filter((a) => a.accountType === 'LIABILITY' && !ROOT_BLOCK.includes((a.name || '').trim()))
+)
+const assetAccounts = computed(() =>
+  accounts.value.filter((a) => a.accountType === 'ASSET' && !ROOT_BLOCK.includes((a.name || '').trim()))
+)
 
 const paymentForm = reactive({
   orderGuid: '',
@@ -65,6 +74,7 @@ const postOrder = async () => {
     postDate.value = new Date().toISOString().slice(0, 10)
     await loadDraftOrders()
     await loadPostedOrders()
+    await loadOrderDetails()
   } catch (e) {
     message.value = e instanceof Error ? e.message : '过账失败'
   } finally {
@@ -104,6 +114,7 @@ const postPayment = async () => {
     paymentForm.cashAccountName = '银行存款'
     paymentForm.payDate = new Date().toISOString().slice(0, 10)
     await loadPostedOrders()
+    await loadOrderDetails()
   } catch (e) {
     message.value = e instanceof Error ? e.message : '支付失败'
   } finally {
@@ -149,9 +160,29 @@ const loadAccounts = async () => {
       })
     }
     walk(data.data || [])
-    accounts.value = flat
+    accounts.value = flat.filter((a) => !ROOT_BLOCK.includes((a.name || '').trim()))
   } catch {
     accounts.value = []
+  }
+}
+
+const loadOrderDetails = async () => {
+  if (!props.bookGuid) return
+  try {
+    const res = await fetch(`${apiBase}/api/business/purchase/orders/detail?bookGuid=${props.bookGuid}`)
+    const data = await res.json()
+    if (!res.ok || !data.success) throw new Error()
+    orderDetails.value =
+      (data.data || []).map((d: any) => ({
+        guid: d.guid,
+        name: d.name,
+        status: d.status,
+        note: d.note,
+        date: d.date ? String(d.date).replace('T', ' ') : '',
+        amount: d.amount != null ? Number(d.amount) : undefined
+      })) ?? []
+  } catch {
+    orderDetails.value = []
   }
 }
 
@@ -159,6 +190,7 @@ onMounted(() => {
   loadDraftOrders()
   loadPostedOrders()
   loadAccounts()
+  loadOrderDetails()
 })
 watch(
   () => props.bookGuid,
@@ -166,6 +198,7 @@ watch(
     if (v) {
       loadDraftOrders()
       loadPostedOrders()
+      loadOrderDetails()
       loadAccounts()
     }
   }
@@ -176,16 +209,18 @@ watch(
     // 切换模式时刷新对应列表
     loadDraftOrders()
     loadPostedOrders()
+    loadOrderDetails()
   }
 )
 </script>
 
 <template>
   <div class="panel">
-    <h3 v-if="(props.mode ?? 'post') === 'post'">采购订单过账</h3>
-    <h3 v-else>采购支付</h3>
+    <h3 v-if="panelMode === 'post'">采购订单过账</h3>
+    <h3 v-else-if="panelMode === 'pay'">采购支付</h3>
+    <h3 v-else>采购订单列表</h3>
 
-    <form v-if="(props.mode ?? 'post') === 'post'" class="form" @submit.prevent="postOrder">
+    <form v-if="panelMode === 'post'" class="form" @submit.prevent="postOrder">
       <label class="field">
         <span>订单（未过账）</span>
         <select v-model="orderForm.orderGuid" required>
@@ -205,11 +240,7 @@ watch(
         <span>入账科目（负债类，默认应付账款）</span>
         <select v-model="orderForm.payableAccountName">
           <option value="">请选择科目（默认应付账款）</option>
-          <option
-            v-for="a in accounts.filter((x) => x.accountType === 'LIABILITY')"
-            :key="a.guid"
-            :value="a.name"
-          >
+          <option v-for="a in liabilityAccounts" :key="a.guid" :value="a.name">
             {{ a.name }}
           </option>
         </select>
@@ -225,7 +256,7 @@ watch(
       <button type="submit" :disabled="loading">过账订单</button>
     </form>
 
-    <form v-else class="form" @submit.prevent="postPayment">
+    <form v-else-if="panelMode === 'pay'" class="form" @submit.prevent="postPayment">
       <label class="field">
         <span>订单（已过账）</span>
         <select v-model="paymentForm.orderGuid" required>
@@ -245,11 +276,7 @@ watch(
         <span>支付账户（转出科目）</span>
         <select v-model="paymentForm.cashAccountName">
           <option value="">请选择科目（默认银行存款）</option>
-          <option
-            v-for="a in accounts.filter((x) => x.accountType === 'ASSET')"
-            :key="a.guid"
-            :value="a.name"
-          >
+          <option v-for="a in assetAccounts" :key="a.guid" :value="a.name">
             {{ a.name }}
           </option>
         </select>
@@ -265,7 +292,23 @@ watch(
       <button type="submit" :disabled="loading">提交支付</button>
     </form>
 
+    <div v-else class="form">
+      <p class="muted">仅查看订单列表</p>
+    </div>
+
     <p v-if="message" class="message">{{ message }}</p>
+    <div class="list" v-if="orderDetails.length">
+      <h4>采购订单列表</h4>
+      <ul>
+        <li v-for="o in orderDetails" :key="o.guid">
+          <strong>{{ o.name }}</strong>
+          <span class="muted">状态：{{ o.status || '—' }}</span>
+          <span class="muted" v-if="o.date">日期：{{ o.date }}</span>
+          <span class="muted" v-if="o.amount !== undefined">金额：{{ Number(o.amount || 0).toFixed(2) }}</span>
+          <span class="muted" v-if="o.note">备注：{{ o.note }}</span>
+        </li>
+      </ul>
+    </div>
   </div>
 </template>
 
@@ -313,5 +356,17 @@ button {
 .message {
   color: #0ea5e9;
   font-weight: 600;
+}
+.list {
+  margin-top: 12px;
+  color: #334155;
+  font-size: 14px;
+}
+.list ul {
+  padding-left: 16px;
+}
+.muted {
+  color: #64748b;
+  margin-left: 6px;
 }
 </style>

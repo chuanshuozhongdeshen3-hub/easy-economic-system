@@ -45,8 +45,8 @@ public class AuthService {
         sysUser.setUpdatedAt(LocalDateTime.now());
         SysUser savedUser = userRepository.save(sysUser);
 
-        // 如果已有账本（可能包含科目数据），优先绑定；否则创建新账本
-        String bookGuid = ensureBookBinding(savedUser.getId(), request, true);
+        // 注册新用户时始终为其创建并绑定独立账本，避免复用旧账本数据
+        String bookGuid = createDefaultBookForUser(savedUser.getId(), request);
         return new AuthResponse(savedUser.getId(), savedUser.getUsername(), bookGuid);
     }
 
@@ -153,6 +153,9 @@ public class AuthService {
     }
 
     private void validateRegisterRequest(RegisterRequest request) {
+        if (request.getRegisteredCapitalNum() == null || request.getRegisteredCapitalNum() <= 0) {
+            throw new IllegalArgumentException("注册资本必须大于 0");
+        }
         if (request.getRegisteredCapitalDenom() != null && request.getRegisteredCapitalDenom() <= 0) {
             throw new IllegalArgumentException("注册资本分母必须大于 0");
         }
@@ -174,7 +177,8 @@ public class AuthService {
         Long registeredCapitalNum = request.getRegisteredCapitalNum();
         Long registeredCapitalDenom = request.getRegisteredCapitalDenom();
         if (registeredCapitalDenom == null && registeredCapitalNum != null) {
-            registeredCapitalDenom = 100L;
+            // 默认按元为单位存储，分母为 1
+            registeredCapitalDenom = 1L;
         }
 
         String disableForeignKeys = "SET FOREIGN_KEY_CHECKS=0";

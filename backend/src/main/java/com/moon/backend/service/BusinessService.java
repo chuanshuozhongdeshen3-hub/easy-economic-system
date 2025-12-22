@@ -4,6 +4,7 @@ import com.moon.backend.dto.CustomerRequest;
 import com.moon.backend.dto.EntryBatchRequest;
 import com.moon.backend.dto.EntryItemRequest;
 import com.moon.backend.dto.NameIdResponse;
+import com.moon.backend.dto.NameStatusResponse;
 import com.moon.backend.dto.PurchaseOrderRequest;
 import com.moon.backend.dto.SalesInvoiceCreateRequest;
 import com.moon.backend.dto.VendorRequest;
@@ -176,6 +177,171 @@ public class BusinessService {
                 (rs, i) -> new NameIdResponse(rs.getString("guid"), rs.getString("name")),
                 bookGuid
         );
+    }
+
+    /** 详细列表：供应商 */
+    public List<NameStatusResponse> listVendorDetails(String bookGuid) {
+        return jdbcTemplate.query(
+                "SELECT guid, name, notes, created_at FROM vendors WHERE book_guid = ? ORDER BY created_at DESC",
+                (rs, i) -> new NameStatusResponse(
+                        rs.getString("guid"),
+                        rs.getString("name"),
+                        null,
+                        rs.getString("notes"),
+                        rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
+                        null
+                ),
+                bookGuid
+        );
+    }
+
+    /** 详细列表：客户 */
+    public List<NameStatusResponse> listCustomerDetails(String bookGuid) {
+        return jdbcTemplate.query(
+                "SELECT guid, name, notes, created_at FROM customers WHERE book_guid = ? ORDER BY created_at DESC",
+                (rs, i) -> new NameStatusResponse(
+                        rs.getString("guid"),
+                        rs.getString("name"),
+                        null,
+                        rs.getString("notes"),
+                        rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
+                        null
+                ),
+                bookGuid
+        );
+    }
+
+    /** 详细列表：员工 */
+    public List<NameStatusResponse> listEmployeeDetails(String bookGuid) {
+        return jdbcTemplate.query(
+                "SELECT guid, name, notes, created_at FROM employees WHERE book_guid = ? ORDER BY created_at DESC",
+                (rs, i) -> new NameStatusResponse(
+                        rs.getString("guid"),
+                        rs.getString("name"),
+                        null,
+                        rs.getString("notes"),
+                        rs.getTimestamp("created_at") != null ? rs.getTimestamp("created_at").toLocalDateTime() : null,
+                        null
+                ),
+                bookGuid
+        );
+    }
+
+    /** 详细列表：采购订单（含状态、付款状态） */
+    public List<NameStatusResponse> listPurchaseOrdersDetail(String bookGuid) {
+        String sql = """
+                SELECT o.guid,
+                       COALESCE(o.id, o.guid) AS name,
+                       o.status,
+                       o.notes,
+                       o.date_opened,
+                       COALESCE(SUM(CAST(e.price_num AS DECIMAL(18,4)) / NULLIF(e.price_denom,0)),0) AS amount,
+                       EXISTS (
+                         SELECT 1 FROM transactions t
+                          WHERE t.book_guid = o.book_guid
+                            AND t.source_guid = o.guid
+                            AND t.source_type = 'PURCHASE_PAYMENT'
+                       ) AS paid
+                  FROM orders o
+                  LEFT JOIN entries e ON e.order_guid = o.guid AND e.book_guid = o.book_guid
+                 WHERE o.book_guid = ? AND o.order_type = 'PURCHASE'
+                 GROUP BY o.guid, o.id, o.status, o.notes, o.date_opened, o.book_guid
+                 ORDER BY o.date_opened DESC
+                """;
+        return jdbcTemplate.query(sql, (rs, i) -> {
+            String status = rs.getString("status");
+            boolean paid = rs.getBoolean("paid");
+            String note = rs.getString("notes");
+            if (paid) {
+                status = status + " | 已支付";
+            }
+            return new NameStatusResponse(
+                    rs.getString("guid"),
+                    rs.getString("name"),
+                    status,
+                    note,
+                    rs.getTimestamp("date_opened") != null ? rs.getTimestamp("date_opened").toLocalDateTime() : null,
+                    rs.getBigDecimal("amount")
+            );
+        }, bookGuid);
+    }
+
+    /** 详细列表：销售发票（含状态、收款状态） */
+    public List<NameStatusResponse> listSalesInvoicesDetail(String bookGuid) {
+        String sql = """
+                SELECT i.guid,
+                       COALESCE(i.id, i.guid) AS name,
+                       i.status,
+                       i.notes,
+                       i.date_opened,
+                       COALESCE(SUM(CAST(e.price_num AS DECIMAL(18,4)) / NULLIF(e.price_denom,0)),0) AS amount,
+                       EXISTS (
+                         SELECT 1 FROM transactions t
+                          WHERE t.book_guid = i.book_guid
+                            AND t.source_guid = i.guid
+                            AND t.source_type = 'SALES_RECEIPT'
+                       ) AS collected
+                  FROM invoices i
+                  LEFT JOIN entries e ON e.invoice_guid = i.guid AND e.book_guid = i.book_guid
+                 WHERE i.book_guid = ? AND i.invoice_type = 'SALES'
+                 GROUP BY i.guid, i.id, i.status, i.notes, i.date_opened, i.book_guid
+                 ORDER BY i.date_opened DESC
+                """;
+        return jdbcTemplate.query(sql, (rs, i) -> {
+            String status = rs.getString("status");
+            boolean collected = rs.getBoolean("collected");
+            String note = rs.getString("notes");
+            if (collected) {
+                status = status + " | 已收款";
+            }
+            return new NameStatusResponse(
+                    rs.getString("guid"),
+                    rs.getString("name"),
+                    status,
+                    note,
+                    rs.getTimestamp("date_opened") != null ? rs.getTimestamp("date_opened").toLocalDateTime() : null,
+                    rs.getBigDecimal("amount")
+            );
+        }, bookGuid);
+    }
+
+    /** 详细列表：员工报销/差旅（含支付状态） */
+    public List<NameStatusResponse> listEmployeeExpensesDetail(String bookGuid) {
+        String sql = """
+                SELECT t.guid,
+                       COALESCE(t.num, t.guid) AS name,
+                       t.doc_status AS status,
+                       t.description AS notes,
+                       t.post_date,
+                       COALESCE(SUM(CAST(s.value_num AS DECIMAL(18,4)) / NULLIF(s.value_denom,0)),0) AS amount,
+                       EXISTS (
+                         SELECT 1 FROM transactions tp
+                          WHERE tp.book_guid = t.book_guid
+                            AND tp.source_guid = t.guid
+                            AND tp.source_type = 'EMP_PAY'
+                       ) AS paid
+                  FROM transactions t
+                  JOIN splits s ON s.tx_guid = t.guid
+                  JOIN accounts a ON s.account_guid = a.guid AND a.account_type = 'EXPENSE'
+                 WHERE t.book_guid = ?
+                   AND t.source_type = 'EMP_EXPENSE'
+                 GROUP BY t.guid, t.num, t.doc_status, t.description, t.post_date, t.book_guid
+                 ORDER BY t.post_date DESC
+                """;
+        return jdbcTemplate.query(sql, (rs, i) -> {
+            String status = rs.getString("status");
+            if (rs.getBoolean("paid")) {
+                status = status + " | 已支付";
+            }
+            return new NameStatusResponse(
+                    rs.getString("guid"),
+                    rs.getString("name"),
+                    status,
+                    rs.getString("notes"),
+                    rs.getTimestamp("post_date") != null ? rs.getTimestamp("post_date").toLocalDateTime() : null,
+                    rs.getBigDecimal("amount")
+            );
+        }, bookGuid);
     }
 
     @Transactional

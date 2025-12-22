@@ -8,7 +8,6 @@ import CustomerPanel from './components/CustomerPanel.vue'
 import PurchaseOrderPanel from './components/PurchaseOrderPanel.vue'
 import SalesInvoicePanel from './components/SalesInvoicePanel.vue'
 import SalesPanel from './components/SalesPanel.vue'
-import ReconcilePanel from './components/ReconcilePanel.vue'
 import EmployeeExpensePanel from './components/EmployeeExpensePanel.vue'
 import ReportPanel from './components/ReportPanel.vue'
 
@@ -69,6 +68,7 @@ const selectAction = (module: string, action: string) => {
           <div class="action-buttons">
             <button type="button" @click="selectAction('采购', '新增供应商')">新增供应商</button>
             <button type="button" @click="selectAction('采购', '新增订单')">新增订单</button>
+            <button type="button" @click="selectAction('采购', '订单列表')">订单列表</button>
             <button type="button" @click="selectAction('采购', '过账')">过账</button>
             <button type="button" @click="selectAction('采购', '支付')">支付</button>
           </div>
@@ -81,6 +81,7 @@ const selectAction = (module: string, action: string) => {
           <div class="action-buttons">
             <button type="button" @click="selectAction('销售', '新增发票')">新增发票</button>
             <button type="button" @click="selectAction('销售', '新增客户')">新增客户</button>
+            <button type="button" @click="selectAction('销售', '发票列表')">发票列表</button>
             <button type="button" @click="selectAction('销售', '过账')">过账</button>
             <button type="button" @click="selectAction('销售', '收款')">收款</button>
           </div>
@@ -92,6 +93,7 @@ const selectAction = (module: string, action: string) => {
           </div>
           <div class="action-buttons">
             <button type="button" @click="selectAction('员工费用', '员工档案')">员工档案</button>
+            <button type="button" @click="selectAction('员工费用', '员工列表')">员工列表</button>
             <button type="button" @click="selectAction('员工费用', '报销/差旅')">报销/差旅</button>
             <button type="button" @click="selectAction('员工费用', '支付')">支付</button>
           </div>
@@ -119,12 +121,19 @@ const selectAction = (module: string, action: string) => {
         </div>
         <PurchasePanel v-if="selection.module === '采购' && selection.action === '过账'" :book-guid="session.bookGuid" mode="post" />
         <PurchasePanel v-else-if="selection.module === '采购' && selection.action === '支付'" :book-guid="session.bookGuid" mode="pay" />
+        <PurchasePanel v-else-if="selection.module === '采购' && selection.action === '订单列表'" :book-guid="session.bookGuid" mode="list" />
         <SupplierPanel v-else-if="selection.module === '采购' && selection.action === '新增供应商'" :book-guid="session.bookGuid" />
         <PurchaseOrderPanel v-else-if="selection.module === '采购' && selection.action === '新增订单'" :book-guid="session.bookGuid" />
         <SalesInvoicePanel v-else-if="selection.module === '销售' && selection.action === '新增发票'" :book-guid="session.bookGuid" />
         <CustomerPanel v-else-if="selection.module === '销售' && selection.action === '新增客户'" :book-guid="session.bookGuid" />
+        <SalesPanel v-else-if="selection.module === '销售' && selection.action === '发票列表'" :book-guid="session.bookGuid" mode="list" />
         <SalesPanel v-else-if="selection.module === '销售' && selection.action === '过账'" :book-guid="session.bookGuid" mode="invoice" />
         <SalesPanel v-else-if="selection.module === '销售' && selection.action === '收款'" :book-guid="session.bookGuid" mode="receipt" />
+        <EmployeeExpensePanel
+          v-else-if="selection.module === '员工费用' && selection.action === '员工列表'"
+          :book-guid="session.bookGuid"
+          action="员工列表"
+        />
         <EmployeeExpensePanel
           v-else-if="selection.module === '员工费用'"
           :book-guid="session.bookGuid"

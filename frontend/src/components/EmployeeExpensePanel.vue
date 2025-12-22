@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 const props = defineProps<{
   bookGuid: string
@@ -43,6 +43,15 @@ const employeeOptions = ref<{ guid: string; name: string }[]>([])
 const expenseOptions = ref<{ guid: string; name: string }[]>([])
 type AccountOption = { guid: string; name: string; accountType: string }
 const accounts = ref<AccountOption[]>([])
+const ROOT_BLOCK = ['根账户', '资产', '负债', '所有者权益', '收入', '费用']
+const expenseAccounts = computed(() =>
+  accounts.value.filter((a) => a.accountType === 'EXPENSE' && !ROOT_BLOCK.includes((a.name || '').trim()))
+)
+const assetAccounts = computed(() =>
+  accounts.value.filter((a) => a.accountType === 'ASSET' && !ROOT_BLOCK.includes((a.name || '').trim()))
+)
+const employeeDetails = ref<{ guid: string; name: string; note?: string }[]>([])
+const expenseDetails = ref<{ guid: string; name: string; status?: string; note?: string; date?: string; amount?: number }[]>([])
 
 watch(
   () => props.action,
@@ -115,6 +124,7 @@ const submitExpense = async () => {
     expenseForm.debitAccountName = '管理费用'
     expenseForm.postDate = new Date().toISOString().slice(0, 10)
     await loadExpenses()
+    await loadExpenseDetails()
   } catch (e) {
     message.value = e instanceof Error ? e.message : '报销过账失败'
   } finally {
@@ -156,6 +166,7 @@ const submitPay = async () => {
     payForm.cashAccountName = '银行存款'
     payForm.payDate = new Date().toISOString().slice(0, 10)
     await loadExpenses()
+    await loadExpenseDetails()
   } catch (e) {
     message.value = e instanceof Error ? e.message : '支付过账失败'
   } finally {
@@ -166,12 +177,19 @@ const submitPay = async () => {
 const loadEmployees = async () => {
   if (!props.bookGuid) return
   try {
-    const res = await fetch(`${apiBase}/api/business/employees?bookGuid=${props.bookGuid}`)
+    const res = await fetch(`${apiBase}/api/business/employees/detail?bookGuid=${props.bookGuid}`)
     const data = await res.json()
     if (!res.ok || !data.success) throw new Error()
-    employeeOptions.value = data.data || []
+    employeeOptions.value = (data.data || []).map((e: any) => ({ guid: e.guid, name: e.name }))
+    employeeDetails.value =
+      (data.data || []).map((e: any) => ({
+        guid: e.guid,
+        name: e.name,
+        note: e.note
+      })) ?? []
   } catch {
     employeeOptions.value = []
+    employeeDetails.value = []
   }
 }
 
@@ -187,15 +205,38 @@ const loadExpenses = async () => {
   }
 }
 
+const loadExpenseDetails = async () => {
+  if (!props.bookGuid) return
+  try {
+    const res = await fetch(`${apiBase}/api/business/employee/expenses/detail?bookGuid=${props.bookGuid}`)
+    const data = await res.json()
+    if (!res.ok || !data.success) throw new Error()
+    expenseDetails.value =
+      (data.data || []).map((d: any) => ({
+        guid: d.guid,
+        name: d.name,
+        status: d.status,
+        note: d.note,
+        date: d.date ? String(d.date).replace('T', ' ') : '',
+        amount: d.amount != null ? Number(d.amount) : undefined
+      })) ?? []
+  } catch {
+    expenseDetails.value = []
+  }
+}
+
 onMounted(loadEmployees)
 onMounted(loadExpenses)
+onMounted(loadExpenseDetails)
 watch(
   () => props.bookGuid,
-  (v) => v && loadEmployees()
-)
-watch(
-  () => props.bookGuid,
-  (v) => v && loadExpenses()
+  (v) => {
+    if (v) {
+      loadEmployees()
+      loadExpenses()
+      loadExpenseDetails()
+    }
+  }
 )
 
 onMounted(() => {
@@ -216,7 +257,7 @@ onMounted(async () => {
       })
     }
     walk(data.data || [])
-    accounts.value = flat
+    accounts.value = flat.filter((a) => !ROOT_BLOCK.includes((a.name || '').trim()))
   } catch {
     accounts.value = []
   }
@@ -281,11 +322,7 @@ onMounted(async () => {
         <span>支出科目（默认管理费用）</span>
         <select v-model="expenseForm.debitAccountName">
           <option value="">请选择科目（默认管理费用）</option>
-          <option
-            v-for="a in accounts.filter((x) => x.accountType === 'EXPENSE')"
-            :key="a.guid"
-            :value="a.name"
-          >
+          <option v-for="a in expenseAccounts" :key="a.guid" :value="a.name">
             {{ a.name }}
           </option>
         </select>
@@ -297,7 +334,7 @@ onMounted(async () => {
       <button type="button" @click="submitExpense" :disabled="loading">过账报销</button>
     </div>
 
-    <div v-else class="form">
+    <div v-else-if="action === '支付'" class="form">
       <label class="field">
         <span>员工</span>
         <select v-model="payForm.employeeGuid">
@@ -320,11 +357,7 @@ onMounted(async () => {
         <span>支付账户（转出科目，默认银行存款）</span>
         <select v-model="payForm.cashAccountName">
           <option value="">请选择科目（默认银行存款）</option>
-          <option
-            v-for="a in accounts.filter((x) => x.accountType === 'ASSET')"
-            :key="a.guid"
-            :value="a.name"
-          >
+          <option v-for="a in assetAccounts" :key="a.guid" :value="a.name">
             {{ a.name }}
           </option>
         </select>
@@ -340,7 +373,33 @@ onMounted(async () => {
       <button type="button" @click="submitPay" :disabled="loading">提交支付</button>
     </div>
 
+    <div v-else class="form">
+      <p class="muted">仅查看员工/报销列表</p>
+    </div>
+
     <p v-if="message" class="message">{{ message }}</p>
+    <div class="list" v-if="employeeDetails.length && action !== '员工档案'">
+      <h4>员工列表</h4>
+      <ul>
+        <li v-for="e in employeeDetails" :key="e.guid">
+          <strong>{{ e.name }}</strong>
+          <span class="muted">ID: {{ e.guid }}</span>
+          <span class="muted" v-if="e.note">备注: {{ e.note }}</span>
+        </li>
+      </ul>
+    </div>
+    <div class="list" v-if="expenseDetails.length && action !== '员工档案'">
+      <h4>报销/差旅记录</h4>
+      <ul>
+        <li v-for="ex in expenseDetails" :key="ex.guid">
+          <strong>{{ ex.name }}</strong>
+          <span class="muted">状态：{{ ex.status }}</span>
+          <span class="muted" v-if="ex.date">日期：{{ ex.date }}</span>
+          <span class="muted" v-if="ex.amount !== undefined">金额：{{ Number(ex.amount || 0).toFixed(2) }}</span>
+          <span class="muted" v-if="ex.note">备注：{{ ex.note }}</span>
+        </li>
+      </ul>
+    </div>
   </div>
 </template>
 
@@ -383,5 +442,17 @@ button {
   margin-top: 8px;
   color: #0ea5e9;
   font-weight: 600;
+}
+.list {
+  margin-top: 12px;
+  color: #334155;
+  font-size: 14px;
+}
+.list ul {
+  padding-left: 16px;
+}
+.muted {
+  color: #64748b;
+  margin-left: 6px;
 }
 </style>

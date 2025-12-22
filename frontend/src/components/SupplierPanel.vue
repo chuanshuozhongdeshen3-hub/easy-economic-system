@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 const message = ref('')
 const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
-const props = defineProps<{ bookGuid: string }>()
+const props = defineProps<{ bookGuid: string; mode?: 'create' | 'list' }>()
 const form = reactive({
   name: '',
   taxId: '',
@@ -14,7 +14,8 @@ const form = reactive({
 })
 
 const loading = ref(false)
-const suppliers = ref<{ guid: string; name: string }[]>([])
+const suppliers = ref<{ guid: string; name: string; status?: string; note?: string }[]>([])
+const panelMode = computed(() => props.mode ?? 'create')
 
 const submit = async () => {
   if (!props.bookGuid) {
@@ -53,7 +54,7 @@ const submit = async () => {
 const loadSuppliers = async () => {
   if (!props.bookGuid) return
   try {
-    const res = await fetch(`${apiBase}/api/business/vendors?bookGuid=${props.bookGuid}`)
+    const res = await fetch(`${apiBase}/api/business/vendors/detail?bookGuid=${props.bookGuid}`)
     const data = await res.json()
     if (!res.ok || !data.success) throw new Error()
     suppliers.value = data.data || []
@@ -71,8 +72,10 @@ watch(
 
 <template>
   <div class="panel">
-    <h3>新增供应商</h3>
-    <div class="form">
+    <h3 v-if="panelMode === 'create'">新增供应商</h3>
+    <h3 v-else>供应商列表</h3>
+
+    <div v-if="panelMode === 'create'" class="form">
       <label class="field">
         <span>名称</span>
         <input v-model.trim="form.name" type="text" placeholder="供应商名称" />
@@ -99,10 +102,17 @@ watch(
       </label>
       <button type="button" @click="submit" :disabled="loading">保存</button>
     </div>
+    <div v-else class="form">
+      <p class="muted">仅查看供应商列表</p>
+    </div>
     <div class="list" v-if="suppliers.length">
       <p class="title">已有供应商：</p>
       <ul>
-        <li v-for="s in suppliers" :key="s.guid">{{ s.name }} ({{ s.guid }})</li>
+        <li v-for="s in suppliers" :key="s.guid">
+          <strong>{{ s.name }}</strong>
+          <span class="muted">ID: {{ s.guid }}</span>
+          <span class="muted" v-if="s.note">备注: {{ s.note }}</span>
+        </li>
       </ul>
     </div>
     <p v-if="message" class="message">{{ message }}</p>
@@ -149,6 +159,10 @@ button {
   margin-top: 10px;
   color: #334155;
   font-size: 14px;
+}
+.muted {
+  color: #64748b;
+  margin-left: 6px;
 }
 .title {
   margin: 0 0 4px;

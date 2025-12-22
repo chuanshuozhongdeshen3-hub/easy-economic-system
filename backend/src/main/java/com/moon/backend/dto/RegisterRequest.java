@@ -1,6 +1,8 @@
 package com.moon.backend.dto;
 
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -26,9 +28,15 @@ public class RegisterRequest {
     private String bookSize;
 
     /**
-     * 注册资本，分子 / 分母，可选；若仅提供分子则默认分母为 100。
+     * 注册资本（元），必填。
      */
+    @NotNull
+    @Min(1)
     private Long registeredCapitalNum;
+
+    /**
+     * 注册资本分母（可选）。默认 1，允许历史值传入。
+     */
     private Long registeredCapitalDenom;
 
     /**

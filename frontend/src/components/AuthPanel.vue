@@ -18,7 +18,6 @@ const form = reactive({
   bookName: '',
   bookSize: '',
   registeredCapitalNum: null as number | null,
-  registeredCapitalDenom: 100 as number | null,
   fiscalYearStartMonth: null as number | null,
   fiscalYearStartDay: null as number | null
 })
@@ -49,7 +48,6 @@ const buildPayload = () => {
     bookName: form.bookName,
     bookSize: form.bookSize || null,
     registeredCapitalNum: form.registeredCapitalNum,
-    registeredCapitalDenom: form.registeredCapitalDenom,
     fiscalYearStartMonth: form.fiscalYearStartMonth,
     fiscalYearStartDay: form.fiscalYearStartDay
   }
@@ -127,25 +125,15 @@ const submit = async () => {
 
         <div class="inline">
           <label class="field">
-            <span>注册资本（分子，可选）</span>
+            <span>注册资本（元，必填，示例 1000000）</span>
             <input
               v-model.number="form.registeredCapitalNum"
               type="number"
-              min="0"
-              step="1"
-              name="registeredCapitalNum"
-              placeholder="单位：分子，示例 1000000"
-            />
-          </label>
-          <label class="field">
-            <span>注册资本（分母，可选）</span>
-            <input
-              v-model.number="form.registeredCapitalDenom"
-              type="number"
               min="1"
               step="1"
-              name="registeredCapitalDenom"
-              placeholder="默认 100"
+              name="registeredCapitalNum"
+              placeholder="单位：元，示例 1000000"
+              required
             />
           </label>
         </div>

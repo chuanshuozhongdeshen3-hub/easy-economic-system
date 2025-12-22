@@ -199,9 +199,6 @@ const loadRelated = async (node: AccountNode) => {
   }
 }
 
-const formatMoney = (value: number) =>
-  (value ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
 onMounted(loadTree)
 watch(
   () => props.bookGuid,
@@ -274,7 +271,7 @@ const AccountNodeRow = defineComponent({
           : null
       ])
   }
-})
+}) as any
 </script>
 
 <template>

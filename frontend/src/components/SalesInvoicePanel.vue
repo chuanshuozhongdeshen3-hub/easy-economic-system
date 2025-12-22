@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 
 const message = ref('')
 const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
@@ -17,7 +17,12 @@ const entryForm = reactive({
   description: ''
 })
 const entries = ref<{ accountGuid: string; amount: number; description: string }[]>([])
-const accounts = ref<{ guid: string; name: string }[]>([])
+type AccountOption = { guid: string; name: string; accountType: string }
+const accounts = ref<AccountOption[]>([])
+const ROOT_BLOCK = ['根账户', '资产', '负债', '所有者权益', '收入', '费用']
+const incomeAccounts = computed(() =>
+  accounts.value.filter((a) => a.accountType === 'INCOME' && !ROOT_BLOCK.includes((a.name || '').trim()))
+)
 const customers = ref<{ guid: string; name: string }[]>([])
 const jobOptions = ref<{ guid: string; name: string }[]>([])
 
@@ -92,15 +97,15 @@ const loadAccounts = async () => {
     const res = await fetch(`${apiBase}/api/accounts/tree?bookGuid=${props.bookGuid}`)
     const data = await res.json()
     if (!res.ok || !data.success) throw new Error()
-    const flat: { guid: string; name: string }[] = []
+    const flat: AccountOption[] = []
     const walk = (nodes: any[]) => {
       nodes.forEach((n) => {
-        flat.push({ guid: n.guid, name: n.name })
+        flat.push({ guid: n.guid, name: n.name, accountType: n.accountType })
         if (n.children?.length) walk(n.children)
       })
     }
     walk(data.data || [])
-    accounts.value = flat
+    accounts.value = flat.filter((a) => !ROOT_BLOCK.includes((a.name || '').trim()))
   } catch {
     accounts.value = []
   }
@@ -191,7 +196,7 @@ onUnmounted(() => {
           <span>科目</span>
           <select v-model="entryForm.accountGuid">
             <option value="">请选择科目</option>
-            <option v-for="a in accounts" :key="a.guid" :value="a.guid">{{ a.name }}</option>
+            <option v-for="a in incomeAccounts" :key="a.guid" :value="a.guid">{{ a.name }}</option>
           </select>
         </label>
         <label class="field">
@@ -275,5 +280,17 @@ button {
   border: 1px solid #cbd5e1;
   background: #fff;
   color: #0f172a;
+}
+.muted {
+  color: #64748b;
+  margin-left: 6px;
+}
+.list {
+  margin-top: 12px;
+  color: #334155;
+  font-size: 14px;
+}
+.list ul {
+  padding-left: 16px;
 }
 </style>

@@ -129,8 +129,9 @@ public class AccountService {
             if (num == null || num == 0) {
                 return;
             }
-            if (denom == null || denom == 0) {
-                denom = 100L;
+            // 默认按元为单位；历史版本分母默认为 100，这里按 1 处理以避免显示被缩小 100 倍
+            if (denom == null || denom <= 0 || denom == 100L) {
+                denom = 1L;
             }
             BigDecimal value = BigDecimal.valueOf(num)
                     .divide(BigDecimal.valueOf(denom), 2, RoundingMode.HALF_UP);

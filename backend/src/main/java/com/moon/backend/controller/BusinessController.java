@@ -4,6 +4,7 @@ import com.moon.backend.dto.ApiResponse;
 import com.moon.backend.dto.CustomerRequest;
 import com.moon.backend.dto.EntryBatchRequest;
 import com.moon.backend.dto.NameIdResponse;
+import com.moon.backend.dto.NameStatusResponse;
 import com.moon.backend.dto.PurchaseOrderRequest;
 import com.moon.backend.dto.SalesInvoiceCreateRequest;
 import com.moon.backend.dto.VendorRequest;
@@ -44,14 +45,29 @@ public class BusinessController {
         return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listVendors(bookGuid)));
     }
 
+    @GetMapping("/vendors/detail")
+    public ResponseEntity<ApiResponse<java.util.List<NameStatusResponse>>> listVendorsDetail(@RequestParam String bookGuid) {
+        return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listVendorDetails(bookGuid)));
+    }
+
     @GetMapping("/customers")
     public ResponseEntity<ApiResponse<java.util.List<NameIdResponse>>> listCustomers(@RequestParam String bookGuid) {
         return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listCustomers(bookGuid)));
     }
 
+    @GetMapping("/customers/detail")
+    public ResponseEntity<ApiResponse<java.util.List<NameStatusResponse>>> listCustomersDetail(@RequestParam String bookGuid) {
+        return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listCustomerDetails(bookGuid)));
+    }
+
     @GetMapping("/employees")
     public ResponseEntity<ApiResponse<java.util.List<NameIdResponse>>> listEmployees(@RequestParam String bookGuid) {
         return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listEmployees(bookGuid)));
+    }
+
+    @GetMapping("/employees/detail")
+    public ResponseEntity<ApiResponse<java.util.List<NameStatusResponse>>> listEmployeesDetail(@RequestParam String bookGuid) {
+        return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listEmployeeDetails(bookGuid)));
     }
 
     @GetMapping("/jobs")
@@ -65,10 +81,20 @@ public class BusinessController {
         return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listPurchaseOrders(bookGuid, status)));
     }
 
+    @GetMapping("/purchase/orders/detail")
+    public ResponseEntity<ApiResponse<java.util.List<NameStatusResponse>>> listPurchaseOrdersDetail(@RequestParam String bookGuid) {
+        return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listPurchaseOrdersDetail(bookGuid)));
+    }
+
     @GetMapping("/sales/invoices")
     public ResponseEntity<ApiResponse<java.util.List<NameIdResponse>>> listSalesInvoices(@RequestParam String bookGuid,
                                                                                          @RequestParam(required = false) String status) {
         return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listSalesInvoices(bookGuid, status)));
+    }
+
+    @GetMapping("/sales/invoices/detail")
+    public ResponseEntity<ApiResponse<java.util.List<NameStatusResponse>>> listSalesInvoicesDetail(@RequestParam String bookGuid) {
+        return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listSalesInvoicesDetail(bookGuid)));
     }
 
     @GetMapping("/purchase/invoices")
@@ -98,6 +124,11 @@ public class BusinessController {
     public ResponseEntity<ApiResponse<Void>> addInvoiceEntries(@PathVariable String invoiceGuid, @Valid @RequestBody EntryBatchRequest request) {
         businessService.addInvoiceEntries(invoiceGuid, request);
         return ResponseEntity.ok(ApiResponse.ok("发票行添加成功", null));
+    }
+
+    @GetMapping("/employee/expenses/detail")
+    public ResponseEntity<ApiResponse<java.util.List<NameStatusResponse>>> listEmployeeExpensesDetail(@RequestParam String bookGuid) {
+        return ResponseEntity.ok(ApiResponse.ok("查询成功", businessService.listEmployeeExpensesDetail(bookGuid)));
     }
 
     @ExceptionHandler({IllegalArgumentException.class, IllegalStateException.class})
