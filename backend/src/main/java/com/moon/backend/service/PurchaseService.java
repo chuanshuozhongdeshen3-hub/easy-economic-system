@@ -69,6 +69,7 @@ public class PurchaseService {
                     " | 已过账金额(分):" + cents,
                     request.getInvoiceGuid()
             );
+            updateInvoiceSettlement(bookGuid, request.getInvoiceGuid(), "LIABILITY");
         }
     }
 
@@ -119,6 +120,7 @@ public class PurchaseService {
                     " | 已支付金额(分):" + cents,
                     request.getInvoiceGuid()
             );
+            updateInvoiceSettlement(bookGuid, request.getInvoiceGuid(), "LIABILITY");
         }
     }
 
@@ -167,5 +169,46 @@ public class PurchaseService {
 
     private boolean hasText(String v) {
         return v != null && !v.isBlank();
+    }
+
+    /**
+     * 根据 entries 和已关联交易的 splits 计算结算金额并更新状态。
+     */
+    private void updateInvoiceSettlement(String bookGuid, String invoiceGuid, String accountType) {
+        // 发票行合计
+        Long total = jdbcTemplate.queryForObject(
+                "SELECT COALESCE(SUM(price_num / NULLIF(price_denom,0)),0) FROM entries WHERE invoice_guid = ? AND book_guid = ?",
+                Long.class,
+                invoiceGuid,
+                bookGuid
+        );
+        // 已结金额（按 source_guid 关联的交易，取对应应付科目分录的绝对值）
+        Long settled = jdbcTemplate.queryForObject(
+                """
+                SELECT COALESCE(SUM(ABS(s.value_num / NULLIF(s.value_denom,0))),0)
+                  FROM splits s
+                  JOIN transactions t ON s.tx_guid = t.guid
+                  JOIN accounts a ON s.account_guid = a.guid
+                 WHERE t.source_guid = ? AND t.book_guid = ? AND a.account_type = ?
+                """,
+                Long.class,
+                invoiceGuid,
+                bookGuid,
+                accountType
+        );
+        if (total == null || total == 0) {
+            return;
+        }
+        String newStatus = (settled != null && settled >= total) ? "APPROVED" : "POSTED";
+        jdbcTemplate.update(
+                "UPDATE invoices SET status = ? WHERE guid = ?",
+                newStatus,
+                invoiceGuid
+        );
+        jdbcTemplate.update(
+                "UPDATE invoices SET notes = CONCAT(COALESCE(notes,''), ?) WHERE guid = ?",
+                " | 已结算金额(分):" + (settled == null ? 0 : settled),
+                invoiceGuid
+        );
     }
 }
