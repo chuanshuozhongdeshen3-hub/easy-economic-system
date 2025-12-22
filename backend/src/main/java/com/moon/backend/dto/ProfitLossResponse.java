@@ -16,4 +16,8 @@ public class ProfitLossResponse {
     private BigDecimal totalIncome;
     private BigDecimal totalExpense;
     private BigDecimal netProfit;
+
+    // 树形展示（新的前端格式）
+    private List<AccountNodeResponse> incomeTree;
+    private List<AccountNodeResponse> expenseTree;
 }

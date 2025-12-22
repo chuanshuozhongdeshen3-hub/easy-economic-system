@@ -11,6 +11,7 @@ import SalesPanel from './components/SalesPanel.vue'
 import EmployeeExpensePanel from './components/EmployeeExpensePanel.vue'
 import ReportPanel from './components/ReportPanel.vue'
 import TaxPanel from './components/TaxPanel.vue'
+import ReconcilePanel from './components/ReconcilePanel.vue'
 
 const session = reactive({
   userId: localStorage.getItem('user_id') ?? '',
@@ -92,12 +93,11 @@ const selectAction = (module: string, action: string) => {
         <div class="action-card">
           <div class="action-header">
             <h3>员工费用</h3>
-            <p>档案/项目、报销审批、应付支付</p>
+            <p>档案、报销审批、应付支付</p>
           </div>
           <div class="action-buttons">
             <button type="button" @click="selectAction('员工费用', '员工档案')">员工档案</button>
             <button type="button" @click="selectAction('员工费用', '员工列表')">员工列表</button>
-            <button type="button" @click="selectAction('员工费用', '项目管理')">项目管理</button>
             <button type="button" @click="selectAction('员工费用', '报销/差旅')">报销/差旅</button>
             <button type="button" @click="selectAction('员工费用', '支付')">支付</button>
           </div>
@@ -123,6 +123,16 @@ const selectAction = (module: string, action: string) => {
             <button type="button" @click="selectAction('税务', '税率维护')">税率维护</button>
           </div>
         </div>
+        <div class="action-card">
+          <div class="action-header">
+            <h3>其他</h3>
+            <p>项目管理、对账</p>
+          </div>
+          <div class="action-buttons">
+            <button type="button" @click="selectAction('其他', '项目管理')">项目管理</button>
+            <button type="button" @click="selectAction('其他', '对账')">对账</button>
+          </div>
+        </div>
       </section>
 
       <section v-if="selection.module" class="workbench">
@@ -133,18 +143,40 @@ const selectAction = (module: string, action: string) => {
           </div>
           <button class="link" type="button" @click="selection.module = selection.action = ''">关闭</button>
         </div>
-        <PurchasePanel v-if="selection.module === '采购' && selection.action === '过账'" :book-guid="session.bookGuid" mode="post" />
-        <PurchasePanel v-else-if="selection.module === '采购' && selection.action === '支付'" :book-guid="session.bookGuid" mode="pay" />
-        <PurchasePanel v-else-if="selection.module === '采购' && selection.action === '订单列表'" :book-guid="session.bookGuid" mode="list" />
-        <SupplierPanel v-else-if="selection.module === '采购' && selection.action === '新增供应商'" :book-guid="session.bookGuid" mode="create" />
-        <SupplierPanel v-else-if="selection.module === '采购' && selection.action === '供应商列表'" :book-guid="session.bookGuid" mode="list" />
+        <PurchasePanel
+          v-if="selection.module === '采购' && selection.action === '过账'"
+          :book-guid="session.bookGuid"
+          mode="post"
+        />
+        <PurchasePanel
+          v-else-if="selection.module === '采购' && selection.action === '支付'"
+          :book-guid="session.bookGuid"
+          mode="pay"
+        />
+        <PurchasePanel
+          v-else-if="selection.module === '采购' && selection.action === '订单列表'"
+          :book-guid="session.bookGuid"
+          mode="list"
+        />
+        <SupplierPanel
+          v-else-if="selection.module === '采购' && selection.action === '新增供应商'"
+          :book-guid="session.bookGuid"
+          mode="create"
+        />
+        <SupplierPanel
+          v-else-if="selection.module === '采购' && selection.action === '供应商列表'"
+          :book-guid="session.bookGuid"
+          mode="list"
+        />
         <PurchaseOrderPanel v-else-if="selection.module === '采购' && selection.action === '新增订单'" :book-guid="session.bookGuid" />
+
         <SalesInvoicePanel v-else-if="selection.module === '销售' && selection.action === '新增发票'" :book-guid="session.bookGuid" />
         <CustomerPanel v-else-if="selection.module === '销售' && selection.action === '新增客户'" :book-guid="session.bookGuid" mode="create" />
         <CustomerPanel v-else-if="selection.module === '销售' && selection.action === '客户列表'" :book-guid="session.bookGuid" mode="list" />
         <SalesPanel v-else-if="selection.module === '销售' && selection.action === '发票列表'" :book-guid="session.bookGuid" mode="list" />
         <SalesPanel v-else-if="selection.module === '销售' && selection.action === '过账'" :book-guid="session.bookGuid" mode="invoice" />
         <SalesPanel v-else-if="selection.module === '销售' && selection.action === '收款'" :book-guid="session.bookGuid" mode="receipt" />
+
         <EmployeeExpensePanel
           v-else-if="selection.module === '员工费用' && selection.action === '员工列表'"
           :book-guid="session.bookGuid"
@@ -155,14 +187,20 @@ const selectAction = (module: string, action: string) => {
           :book-guid="session.bookGuid"
           :action="selection.action"
         />
+
         <ReportPanel v-else-if="selection.module === '报表' && selection.action === '利润表'" :book-guid="session.bookGuid" type="pl" />
         <ReportPanel v-else-if="selection.module === '报表' && selection.action === '资产负债表'" :book-guid="session.bookGuid" type="bs" />
         <ReportPanel v-else-if="selection.module === '报表' && selection.action === '现金流量表'" :book-guid="session.bookGuid" type="cf" />
-        <TaxPanel
-          v-else-if="selection.module === '税务'"
+
+        <TaxPanel v-else-if="selection.module === '税务'" :book-guid="session.bookGuid" :mode="selection.action" />
+
+        <EmployeeExpensePanel
+          v-else-if="selection.module === '其他' && selection.action === '项目管理'"
           :book-guid="session.bookGuid"
-          :mode="selection.action"
+          action="项目管理"
         />
+        <ReconcilePanel v-else-if="selection.module === '其他' && selection.action === '对账'" :book-guid="session.bookGuid" />
+
         <div v-else class="placeholder">
           <p>功能即将接入：{{ selection.module }} - {{ selection.action }}</p>
         </div>

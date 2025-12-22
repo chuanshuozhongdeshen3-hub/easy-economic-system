@@ -447,7 +447,7 @@ onMounted(async () => {
         </li>
       </ul>
     </div>
-    <div v-else-if="employeeDetails.length && action !== '员工档案'" class="list">
+    <div v-else-if="employeeDetails.length && action !== '员工档案' && action !== '项目管理'" class="list">
       <h4>员工列表</h4>
       <ul>
         <li v-for="e in employeeDetails" :key="e.guid">

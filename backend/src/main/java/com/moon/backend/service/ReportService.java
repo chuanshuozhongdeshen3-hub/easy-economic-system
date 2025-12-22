@@ -1,5 +1,6 @@
 package com.moon.backend.service;
 
+import com.moon.backend.dto.AccountNodeResponse;
 import com.moon.backend.dto.BalanceSheetResponse;
 import com.moon.backend.dto.CashFlowResponse;
 import com.moon.backend.dto.NamedAmount;
@@ -23,6 +24,7 @@ import java.util.stream.Collectors;
 public class ReportService {
 
     private final JdbcTemplate jdbcTemplate;
+    private final AccountService accountService;
 
     public ProfitLossResponse profitLoss(String bookGuid, LocalDate start, LocalDate end) {
         List<AccountBalance> balances = queryBalances(bookGuid, start, end);
@@ -57,88 +59,41 @@ public class ReportService {
         BigDecimal totalExpense = sumAmounts(expenseItems);
         BigDecimal netProfit = totalIncome.subtract(totalExpense);
 
-        return new ProfitLossResponse(incomeItems, expenseItems, totalIncome, totalExpense, netProfit);
+        // 树形：只取收入/费用两棵
+        List<AccountNodeResponse> tree = accountService.getAccountTree(bookGuid);
+        List<AccountNodeResponse> incomeTree = tree.stream()
+                .filter(n -> "INCOME".equalsIgnoreCase(n.getAccountType()))
+                .toList();
+        List<AccountNodeResponse> expenseTree = tree.stream()
+                .filter(n -> "EXPENSE".equalsIgnoreCase(n.getAccountType()))
+                .toList();
+
+        return new ProfitLossResponse(incomeItems, expenseItems, totalIncome, totalExpense, netProfit, incomeTree, expenseTree);
     }
 
     public BalanceSheetResponse balanceSheet(String bookGuid, LocalDate asOf) {
-        List<AccountBalance> balances = queryBalances(bookGuid, null, asOf);
+        try {
+            // 使用账户树直接分组展示
+            List<AccountNodeResponse> tree = accountService.getAccountTree(bookGuid);
+            AccountNodeResponse assetRoot = findTop(tree, "ASSET");
+            AccountNodeResponse liabRoot = findTop(tree, "LIABILITY");
+            AccountNodeResponse equityRoot = findTop(tree, "EQUITY");
 
-        Map<String, BigDecimal> asset = new HashMap<>();
-        Map<String, BigDecimal> liability = new HashMap<>();
-        Map<String, BigDecimal> equity = new HashMap<>();
+            BigDecimal totalAssets = safeBalance(assetRoot);
+            BigDecimal totalLiabilities = safeBalance(liabRoot);
+            BigDecimal totalEquity = safeBalance(equityRoot);
 
-        for (AccountBalance ab : balances) {
-            String lower = ab.name.toLowerCase(Locale.ROOT);
-            switch (ab.type.toUpperCase(Locale.ROOT)) {
-                case "ASSET" -> {
-                    String bucket;
-                    if (lower.contains("现金") || lower.contains("银行存款")) {
-                        bucket = "货币资金";
-                    } else if (lower.contains("应收账款")) {
-                        bucket = "应收账款";
-                    } else if (lower.contains("预付")) {
-                        bucket = "预付账款";
-                    } else if (lower.contains("应收")) {
-                        bucket = "其他应收";
-                    } else if (lower.contains("存货")) {
-                        bucket = "存货";
-                    } else if (lower.contains("固定资产")) {
-                        bucket = "固定资产";
-                    } else if (lower.contains("累计折旧")) {
-                        bucket = "累计折旧";
-                    } else {
-                        bucket = "其他资产";
-                    }
-                    asset.merge(bucket, ab.amount, BigDecimal::add);
-                }
-                case "LIABILITY" -> {
-                    String bucket;
-                    if (lower.contains("应付账款")) {
-                        bucket = "应付账款";
-                    } else if (lower.contains("预收")) {
-                        bucket = "预收账款";
-                    } else if (lower.contains("应付职工薪酬")) {
-                        bucket = "应付职工薪酬";
-                    } else if (lower.contains("应交") || lower.contains("税")) {
-                        bucket = "应交税费";
-                    } else {
-                        bucket = "其他负债";
-                    }
-                    liability.merge(bucket, ab.amount, BigDecimal::add);
-                }
-                case "EQUITY" -> {
-                    String bucket;
-                    if (lower.contains("实收资本") || lower.contains("股本")) {
-                        bucket = "实收资本";
-                    } else if (lower.contains("资本公积")) {
-                        bucket = "资本公积";
-                    } else if (lower.contains("未分配利润")) {
-                        bucket = "未分配利润";
-                    } else {
-                        bucket = "其他权益";
-                    }
-                    equity.merge(bucket, ab.amount, BigDecimal::add);
-                }
-                default -> {
-                }
-            }
+            return new BalanceSheetResponse(
+                    assetRoot != null ? assetRoot.getChildren() : List.of(),
+                    liabRoot != null ? liabRoot.getChildren() : List.of(),
+                    equityRoot != null ? equityRoot.getChildren() : List.of(),
+                    totalAssets,
+                    totalLiabilities,
+                    totalEquity
+            );
+        } catch (Exception ex) {
+            throw new IllegalStateException("资产负债表计算失败: " + ex.getClass().getSimpleName() + " - " + ex.getMessage(), ex);
         }
-
-        List<NamedAmount> assetItems = toList(asset);
-        List<NamedAmount> liabilityItems = toList(liability);
-        List<NamedAmount> equityItems = toList(equity);
-        BigDecimal totalAssets = sumAmounts(assetItems);
-        BigDecimal totalLiabilities = sumAmounts(liabilityItems);
-        BigDecimal totalEquity = sumAmounts(equityItems);
-
-        return new BalanceSheetResponse(
-                assetItems,
-                liabilityItems,
-                equityItems,
-                totalAssets,
-                totalLiabilities,
-                totalEquity
-        );
     }
 
     public CashFlowResponse cashFlowNet(String bookGuid, LocalDate start, LocalDate end) {
@@ -147,7 +102,22 @@ public class ReportService {
         BigDecimal begin = sumCashLike(beginBalances);
         BigDecimal change = sumCashLike(periodBalances);
         BigDecimal endBalance = begin.add(change);
-        return new CashFlowResponse(begin, endBalance, change);
+
+        // 按本期科目余额正负拆分资金来源/流出（简单版）
+        List<NamedAmount> inflow = new ArrayList<>();
+        List<NamedAmount> outflow = new ArrayList<>();
+        for (AccountBalance ab : periodBalances) {
+            if (ab.amount.compareTo(BigDecimal.ZERO) > 0) {
+                inflow.add(new NamedAmount(ab.name, ab.amount.setScale(2, RoundingMode.HALF_UP)));
+            } else if (ab.amount.compareTo(BigDecimal.ZERO) < 0) {
+                outflow.add(new NamedAmount(ab.name, ab.amount.abs().setScale(2, RoundingMode.HALF_UP)));
+            }
+        }
+        BigDecimal totalIn = sumAmounts(inflow);
+        BigDecimal totalOut = sumAmounts(outflow);
+        BigDecimal net = totalIn.subtract(totalOut);
+
+        return new CashFlowResponse(begin, endBalance, net, inflow, outflow, totalIn, totalOut);
     }
 
     private List<AccountBalance> queryBalances(String bookGuid, LocalDate start, LocalDate end) {
@@ -212,5 +182,18 @@ public class ReportService {
     }
 
     private record AccountBalance(String name, String type, BigDecimal amount) {
+    }
+
+    private AccountNodeResponse findTop(List<AccountNodeResponse> roots, String type) {
+        return roots.stream()
+                .filter(n -> type.equalsIgnoreCase(n.getAccountType()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private BigDecimal safeBalance(AccountNodeResponse node) {
+        return node == null || node.getBalance() == null
+                ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
+                : node.getBalance().setScale(2, RoundingMode.HALF_UP);
     }
 }

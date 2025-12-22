@@ -11,9 +11,9 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class BalanceSheetResponse {
-    private List<NamedAmount> assets;
-    private List<NamedAmount> liabilities;
-    private List<NamedAmount> equity;
+    private List<AccountNodeResponse> assets;
+    private List<AccountNodeResponse> liabilities;
+    private List<AccountNodeResponse> equity;
     private BigDecimal totalAssets;
     private BigDecimal totalLiabilities;
     private BigDecimal totalEquity;
