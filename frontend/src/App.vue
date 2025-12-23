@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, onMounted, reactive, watch } from 'vue'
 import AuthPanel from './components/AuthPanel.vue'
 import AccountTree from './components/AccountTree.vue'
 import PurchasePanel from './components/PurchasePanel.vue'
@@ -12,6 +12,8 @@ import EmployeeExpensePanel from './components/EmployeeExpensePanel.vue'
 import ReportPanel from './components/ReportPanel.vue'
 import TaxPanel from './components/TaxPanel.vue'
 import ReconcilePanel from './components/ReconcilePanel.vue'
+
+const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:8080'
 
 type ModuleAction = { label: string; action: string; hint?: string }
 type ModuleBlock = { name: string; description: string; actions: ModuleAction[] }
@@ -26,6 +28,24 @@ const session = reactive({
 const selection = reactive({
   module: '',
   action: ''
+})
+
+const dashboard = reactive({
+  cashTotal: 0,
+  receivableOutstanding: 0,
+  payableOutstanding: 0,
+  receivedTotal: 0,
+  paidTotal: 0,
+  receivableProgress: 0,
+  payableProgress: 0,
+  salesInvoiceCount: 0,
+  salesReceiptCount: 0,
+  purchaseInvoiceCount: 0,
+  purchasePaymentCount: 0,
+  receivablePendingCount: 0,
+  payablePendingCount: 0,
+  taxDue: 0,
+  loaded: false
 })
 
 const modalSelection = reactive({
@@ -48,12 +68,36 @@ const modalExceptions = new Set<string>([
 
 const isModalAction = (module: string, action: string) => !modalExceptions.has(`${module}-${action}`)
 
-const statCards: StatCard[] = [
-  { title: '现金余额', value: '¥1,280,000', change: '+3.8% 较上月', tone: 'positive', hint: '含银行/现金账户' },
-  { title: '应收账款', value: '¥320,500', change: '待回款 12 笔', tone: 'warning', hint: '催收节奏与账龄' },
-  { title: '应付账款', value: '¥198,300', change: '本周到期 6 笔', tone: 'neutral', hint: '付款计划与资金池' },
-  { title: '税费准备', value: '¥86,000', change: '含增值税及附加', tone: 'neutral', hint: '自动计提数据' }
-]
+const statCards = computed<StatCard[]>(() => [
+  {
+    title: '现金余额',
+    value: `¥${formatAmount(dashboard.cashTotal)}`,
+    change: `已收 ${dashboard.salesReceiptCount} 笔`,
+    tone: 'positive',
+    hint: '含银行/现金账户'
+  },
+  {
+    title: '应收账款',
+    value: `¥${formatAmount(dashboard.receivableOutstanding)}`,
+    change: `待回款 ${dashboard.receivablePendingCount} 笔`,
+    tone: 'warning',
+    hint: '催收节奏与账龄'
+  },
+  {
+    title: '应付账款',
+    value: `¥${formatAmount(dashboard.payableOutstanding)}`,
+    change: `待付款 ${dashboard.payablePendingCount} 笔`,
+    tone: 'neutral',
+    hint: '付款计划与资金池'
+  },
+  {
+    title: '税费准备',
+    value: `¥${formatAmount(dashboard.taxDue ?? 0)}`,
+    change: '含应交税费',
+    tone: 'neutral',
+    hint: '自动计提数据'
+  }
+])
 
 const modules: ModuleBlock[] = [
   {
@@ -156,6 +200,47 @@ const clearModal = () => {
   modalSelection.module = ''
   modalSelection.action = ''
 }
+
+const formatAmount = (value: number) =>
+  (value ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+const loadDashboard = async () => {
+  if (!session.bookGuid) return
+  try {
+    const res = await fetch(`${apiBase}/api/dashboard/summary?bookGuid=${session.bookGuid}`)
+    const data = await res.json()
+    if (!res.ok || !data.success) throw new Error(data.message || '加载失败')
+    const d = data.data || {}
+    dashboard.cashTotal = Number(d.cashTotal || 0)
+    dashboard.receivableOutstanding = Number(d.receivableOutstanding || 0)
+    dashboard.payableOutstanding = Number(d.payableOutstanding || 0)
+    dashboard.receivedTotal = Number(d.receivedTotal || 0)
+    dashboard.paidTotal = Number(d.paidTotal || 0)
+    dashboard.receivableProgress = Number(d.receivableProgress || 0)
+    dashboard.payableProgress = Number(d.payableProgress || 0)
+    dashboard.salesInvoiceCount = Number(d.salesInvoiceCount || 0)
+    dashboard.salesReceiptCount = Number(d.salesReceiptCount || 0)
+    dashboard.purchaseInvoiceCount = Number(d.purchaseInvoiceCount || 0)
+    dashboard.purchasePaymentCount = Number(d.purchasePaymentCount || 0)
+    dashboard.receivablePendingCount = Number(d.receivablePendingCount || 0)
+    dashboard.payablePendingCount = Number(d.payablePendingCount || 0)
+    dashboard.taxDue = Number(d.taxDue || 0)
+    dashboard.loaded = true
+  } catch {
+    dashboard.loaded = false
+  }
+}
+
+watch(
+  () => session.bookGuid,
+  (val) => {
+    if (val) loadDashboard()
+  }
+)
+
+onMounted(() => {
+  if (session.bookGuid) loadDashboard()
+})
 </script>
 
 <template>
@@ -193,20 +278,29 @@ const clearModal = () => {
         </div>
         <div class="hero__panel">
           <div class="hero__badge">
-            <span>月度资金</span>
-            <strong>¥1,280,000</strong>
+            <span>资金总额</span>
+            <strong v-if="dashboard.loaded">¥ {{ formatAmount(dashboard.cashTotal) }}</strong>
+            <strong v-else>加载中...</strong>
             <small>含现金、银行、理财</small>
           </div>
           <div class="hero__split">
             <div>
               <p class="eyebrow">收款进度</p>
-              <h3>78%</h3>
-              <small>开票 23 · 回款 18</small>
+              <h3 v-if="dashboard.loaded">{{ dashboard.receivableProgress.toFixed(1) }}%</h3>
+              <h3 v-else>--%</h3>
+              <small>
+                开票 {{ dashboard.salesInvoiceCount }} 单
+                · 回款 {{ dashboard.salesReceiptCount }} 单
+              </small>
             </div>
             <div>
               <p class="eyebrow">付款计划</p>
-              <h3>42%</h3>
-              <small>到期 6 · 已付 3</small>
+              <h3 v-if="dashboard.loaded">{{ dashboard.payableProgress.toFixed(1) }}%</h3>
+              <h3 v-else>--%</h3>
+              <small>
+                支付 {{ dashboard.purchaseInvoiceCount }} 单
+                · 已付 {{ dashboard.purchasePaymentCount }} 单
+              </small>
             </div>
           </div>
           <div class="hero__footer">凭证、发票、账务串联，随时过账。</div>

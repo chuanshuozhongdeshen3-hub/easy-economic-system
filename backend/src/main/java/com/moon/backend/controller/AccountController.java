@@ -37,8 +37,10 @@ public class AccountController {
     }
 
     @GetMapping("/{guid}/related")
-    public ResponseEntity<ApiResponse<List<RelatedDocResponse>>> relatedDocs(@PathVariable String guid, @RequestParam String bookGuid) {
-        List<RelatedDocResponse> docs = accountService.listRelatedDocs(bookGuid, guid);
+    public ResponseEntity<ApiResponse<List<RelatedDocResponse>>> relatedDocs(@PathVariable String guid,
+                                                                             @RequestParam String bookGuid,
+                                                                             @RequestParam(defaultValue = "false") boolean includeChildren) {
+        List<RelatedDocResponse> docs = accountService.listRelatedDocs(bookGuid, guid, includeChildren);
         return ResponseEntity.ok(ApiResponse.ok("查询成功", docs));
     }
 

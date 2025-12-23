@@ -181,7 +181,7 @@ const loadRelated = async (node: AccountNode) => {
   related.message = ''
   related.items = []
   try {
-    const res = await fetch(`${apiBase}/api/accounts/${node.guid}/related?bookGuid=${props.bookGuid}`)
+    const res = await fetch(`${apiBase}/api/accounts/${node.guid}/related?bookGuid=${props.bookGuid}&includeChildren=true`)
     const data = await res.json()
     if (!res.ok || !data.success) {
       throw new Error(data.message || '查询失败')
@@ -254,9 +254,7 @@ const AccountNodeRow = defineComponent({
                   )
                 : h('span', { class: 'toggle placeholder' }, '.'),
               h('span', { class: 'icon' }, props.level === 0 ? '*' : '+'),
-              h('span', { class: 'name' }, props.node.name),
-              props.node.code ? h('span', { class: 'code' }, props.node.code) : null,
-              props.node.description ? h('span', { class: 'desc' }, props.node.description) : null
+              h('span', { class: 'name', title: props.node.description || '' }, props.node.name)
             ]),
             h(
               'span',

@@ -204,10 +204,11 @@ public class AuthService {
             // 根账户
             jdbcTemplate.update(
                     "INSERT INTO accounts (guid, book_guid, name, code, description, account_type, parent_guid, hidden, placeholder, created_at, updated_at) " +
-                            "VALUES (?, ?, ?, NULL, ?, ?, NULL, 0, 1, ?, ?)",
+                            "VALUES (?, ?, ?, ?, ?, ?, NULL, 0, 1, ?, ?)",
                     rootAccountGuid,
                     bookGuid,
                     "根账户",
+                    "0",
                     "系统自动创建的根账户",
                     "ASSET",
                     now,
@@ -238,51 +239,52 @@ public class AuthService {
         String incomeGuid = UUID.randomUUID().toString();
         String expenseGuid = UUID.randomUUID().toString();
 
-        insertAccount(assetGuid, bookGuid, "资产", "ASSET", rootGuid, true, "资产类科目", now);
-        insertAccount(liabilityGuid, bookGuid, "负债", "LIABILITY", rootGuid, true, "负债类科目", now);
-        insertAccount(equityGuid, bookGuid, "所有者权益", "EQUITY", rootGuid, true, "权益类科目", now);
-        insertAccount(incomeGuid, bookGuid, "收入", "INCOME", rootGuid, true, "收入类科目", now);
-        insertAccount(expenseGuid, bookGuid, "费用", "EXPENSE", rootGuid, true, "费用类科目", now);
+        insertAccount(assetGuid, bookGuid, "资产", "1", "ASSET", rootGuid, true, "资产类科目", now);
+        insertAccount(liabilityGuid, bookGuid, "负债", "2", "LIABILITY", rootGuid, true, "负债类科目", now);
+        insertAccount(equityGuid, bookGuid, "所有者权益", "3", "EQUITY", rootGuid, true, "权益类科目", now);
+        insertAccount(incomeGuid, bookGuid, "收入", "4", "INCOME", rootGuid, true, "收入类科目", now);
+        insertAccount(expenseGuid, bookGuid, "费用", "5", "EXPENSE", rootGuid, true, "费用类科目", now);
 
         // 示例子科目
         List<AccountSeed> seeds = new ArrayList<>();
-        seeds.add(new AccountSeed("现金", "ASSET", assetGuid, false, "库存现金"));
-        seeds.add(new AccountSeed("银行存款", "ASSET", assetGuid, false, "银行账户余额"));
-        seeds.add(new AccountSeed("应收账款", "ASSET", assetGuid, false, "客户应收"));
-        seeds.add(new AccountSeed("预付账款", "ASSET", assetGuid, false, "供应商预付款"));
-        seeds.add(new AccountSeed("存货", "ASSET", assetGuid, false, "原材料/库存商品"));
-        seeds.add(new AccountSeed("固定资产", "ASSET", assetGuid, false, "固定资产原值"));
-        seeds.add(new AccountSeed("累计折旧", "ASSET", assetGuid, false, "固定资产累计折旧"));
+        seeds.add(new AccountSeed("现金", "1001", "ASSET", assetGuid, false, "库存现金"));
+        seeds.add(new AccountSeed("银行存款", "1002", "ASSET", assetGuid, false, "银行账户余额"));
+        seeds.add(new AccountSeed("应收账款", "1122", "ASSET", assetGuid, false, "客户应收"));
+        seeds.add(new AccountSeed("预付账款", "1123", "ASSET", assetGuid, false, "供应商预付款"));
+        seeds.add(new AccountSeed("存货", "1401", "ASSET", assetGuid, false, "原材料/库存商品"));
+        seeds.add(new AccountSeed("固定资产", "1601", "ASSET", assetGuid, false, "固定资产原值"));
+        seeds.add(new AccountSeed("累计折旧", "1602", "ASSET", assetGuid, false, "固定资产累计折旧"));
 
-        seeds.add(new AccountSeed("应付账款", "LIABILITY", liabilityGuid, false, "供应商应付"));
-        seeds.add(new AccountSeed("预收账款", "LIABILITY", liabilityGuid, false, "客户预收"));
-        seeds.add(new AccountSeed("应付职工薪酬", "LIABILITY", liabilityGuid, false, "工资社保公积金"));
-        seeds.add(new AccountSeed("应交税费", "LIABILITY", liabilityGuid, false, "各类税费应交"));
+        seeds.add(new AccountSeed("应付账款", "2202", "LIABILITY", liabilityGuid, false, "供应商应付"));
+        seeds.add(new AccountSeed("预收账款", "2203", "LIABILITY", liabilityGuid, false, "客户预收"));
+        seeds.add(new AccountSeed("应付职工薪酬", "2211", "LIABILITY", liabilityGuid, false, "工资社保公积金"));
+        seeds.add(new AccountSeed("应交税费", "2221", "LIABILITY", liabilityGuid, false, "各类税费应交"));
 
-        seeds.add(new AccountSeed("实收资本", "EQUITY", equityGuid, false, "投资者投入资本"));
-        seeds.add(new AccountSeed("资本公积", "EQUITY", equityGuid, false, "资本溢价等"));
-        seeds.add(new AccountSeed("留存收益", "EQUITY", equityGuid, false, "未分配利润"));
+        seeds.add(new AccountSeed("实收资本", "3001", "EQUITY", equityGuid, false, "投资者投入资本"));
+        seeds.add(new AccountSeed("资本公积", "3002", "EQUITY", equityGuid, false, "资本溢价等"));
+        seeds.add(new AccountSeed("留存收益", "3101", "EQUITY", equityGuid, false, "未分配利润"));
 
-        seeds.add(new AccountSeed("主营业务收入", "INCOME", incomeGuid, false, "主营产品/服务收入"));
-        seeds.add(new AccountSeed("其他业务收入", "INCOME", incomeGuid, false, "非主营业务收入"));
+        seeds.add(new AccountSeed("主营业务收入", "6001", "INCOME", incomeGuid, false, "主营产品/服务收入"));
+        seeds.add(new AccountSeed("其他业务收入", "6051", "INCOME", incomeGuid, false, "非主营业务收入"));
 
-        seeds.add(new AccountSeed("主营业务成本", "EXPENSE", expenseGuid, false, "对应主营收入的成本"));
-        seeds.add(new AccountSeed("销售费用", "EXPENSE", expenseGuid, false, "销售相关费用"));
-        seeds.add(new AccountSeed("管理费用", "EXPENSE", expenseGuid, false, "管理相关费用"));
-        seeds.add(new AccountSeed("财务费用", "EXPENSE", expenseGuid, false, "利息等财务成本"));
+        seeds.add(new AccountSeed("主营业务成本", "6401", "EXPENSE", expenseGuid, false, "对应主营收入的成本"));
+        seeds.add(new AccountSeed("销售费用", "6601", "EXPENSE", expenseGuid, false, "销售相关费用"));
+        seeds.add(new AccountSeed("管理费用", "6602", "EXPENSE", expenseGuid, false, "管理相关费用"));
+        seeds.add(new AccountSeed("财务费用", "6603", "EXPENSE", expenseGuid, false, "利息等财务成本"));
 
         for (AccountSeed seed : seeds) {
-            insertAccount(UUID.randomUUID().toString(), bookGuid, seed.name, seed.type, seed.parentGuid, seed.placeholder, seed.description, now);
+            insertAccount(UUID.randomUUID().toString(), bookGuid, seed.name, seed.code, seed.type, seed.parentGuid, seed.placeholder, seed.description, now);
         }
     }
 
-    private void insertAccount(String guid, String bookGuid, String name, String type, String parentGuid, boolean placeholder, String description, LocalDateTime now) {
+    private void insertAccount(String guid, String bookGuid, String name, String code, String type, String parentGuid, boolean placeholder, String description, LocalDateTime now) {
         jdbcTemplate.update(
                 "INSERT INTO accounts (guid, book_guid, name, code, description, account_type, parent_guid, hidden, placeholder, created_at, updated_at) " +
-                        "VALUES (?, ?, ?, NULL, ?, ?, ?, 0, ?, ?, ?)",
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)",
                 guid,
                 bookGuid,
                 name,
+                code,
                 description,
                 type,
                 parentGuid,
@@ -294,13 +296,15 @@ public class AuthService {
 
     private static class AccountSeed {
         final String name;
+        final String code;
         final String type;
         final String parentGuid;
         final boolean placeholder;
         final String description;
 
-        AccountSeed(String name, String type, String parentGuid, boolean placeholder, String description) {
+        AccountSeed(String name, String code, String type, String parentGuid, boolean placeholder, String description) {
             this.name = name;
+            this.code = code;
             this.type = type;
             this.parentGuid = parentGuid;
             this.placeholder = placeholder;
